@@ -2,7 +2,6 @@ experiment: exp8_gossip
 strategy: gossip
 
 numNodes: 20
-fanout: 3
 numClusters: 4
 
 messageSource: 0

@@ -85,15 +85,18 @@ class PeerState:
 
         # AHBN controller values are frozen in ControlSim v0.61.  Legacy
         # topology overrides are intentionally ignored for strategy=ahbn.
-        self.ahbn_params = AHBNParams()
+        self.ahbn_params = AHBNParams() if self.strategy == "ahbn" else None
         self.default_fanout = (
             self.ahbn_params.default_fanout
             if self.strategy == "ahbn"
-            else topo.get("fanout", 3)
+            else topo.get("fanout")
         )
-        self.mode_threshold = self.ahbn_params.mode_threshold
-        self.min_fanout = self.ahbn_params.min_fanout
-        self.max_fanout = self.ahbn_params.max_fanout
+        self.rng = random.Random(int(topo.get("seed", 42)))
+        self.mode_threshold = (
+            self.ahbn_params.mode_threshold if self.ahbn_params else None
+        )
+        self.min_fanout = self.ahbn_params.min_fanout if self.ahbn_params else None
+        self.max_fanout = self.ahbn_params.max_fanout if self.ahbn_params else None
 
         peer_key = str(self.peer_id)
 
@@ -198,8 +201,16 @@ class PeerState:
         self.forward_count = 0
 
         self.recv_count = 0
-        self.ahbn_controller = CanonicalAHBNController(self.ahbn_params)
-        self.ahbn_state = AHBNState(fanout=self.ahbn_params.default_fanout)
+        self.ahbn_controller = (
+            CanonicalAHBNController(self.ahbn_params)
+            if self.strategy == "ahbn"
+            else None
+        )
+        self.ahbn_state = (
+            AHBNState(fanout=self.ahbn_params.default_fanout)
+            if self.strategy == "ahbn"
+            else None
+        )
         # Fixed K1 normalization reference: one second one-hop processing and
         # transport delay maps to saturation. It is not experiment-tuned.
         self.observations = KubernetesObservationAdapter(latency_max_seconds=1.0)
@@ -351,19 +362,20 @@ class PeerState:
         # --------------------------------------------------
 
         if self.strategy == "gossip":
-            candidates = [
+            candidates = list(dict.fromkeys(
                 n
                 for n in self.neighbors
-                if n != sender_id
-            ]
+                if n not in (sender_id, self.peer_id)
+                and n not in self.unavailable_neighbors
+            ))
 
-            k = min(
-                self.default_fanout,
-                len(candidates),
-            )
+            if self.default_fanout is None:
+                return candidates
+
+            k = min(int(self.default_fanout), len(candidates))
 
             return (
-                random.sample(candidates, k)
+                self.rng.sample(candidates, k)
                 if k > 0
                 else []
             )
@@ -764,7 +776,7 @@ class PeerService(
             peer_id=self.state.peer_id,
             is_cluster_head=self.state.is_cluster_head,
             mode=self.state.mode,
-            fanout=self.state.fanout,
+            fanout=self.state.fanout if self.state.fanout is not None else 0,
             seen_count=len(
                 self.state.seen_messages
             ),

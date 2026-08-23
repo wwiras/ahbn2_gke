@@ -111,8 +111,11 @@ def main():
         cfg.get("numNodes", 20)
     )
 
-    fanout = int(
-        cfg.get("fanout", 3)
+    configured_fanout = cfg.get("fanout")
+    fanout = (
+        None
+        if strategy == "gossip" and configured_fanout is None
+        else int(configured_fanout if configured_fanout is not None else 3)
     )
 
     num_clusters = int(
