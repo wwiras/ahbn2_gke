@@ -8,6 +8,10 @@ import networkx as nx
 import yaml
 
 
+DCSOC_EPS = 2.0
+DCSOC_MIN_SAMPLES = 3
+
+
 def build_graph(
     num_nodes: int,
     topology_type: str,
@@ -78,6 +82,123 @@ def assign_clusters(
     return cluster_heads, cluster_of, members
 
 
+def assign_dcsoc_clusters(
+    graph: nx.Graph,
+    eps: float = DCSOC_EPS,
+    min_samples: int = DCSOC_MIN_SAMPLES,
+):
+    """Reproduce the frozen ControlSim static DC-SoC overlay.
+
+    Density clustering uses the precomputed all-pairs physical hop distance.
+    Noise is attached to its nearest established cluster; if none is formed,
+    all nodes form one cluster.  This is DBSCAN-based, not full DBSCAN++.
+    """
+    if eps <= 0 or min_samples <= 0:
+        raise ValueError("DC-SoC eps and min_samples must be > 0")
+    node_ids = sorted(graph.nodes())
+    if not node_ids:
+        return [], {}, {}, {}, []
+    unreachable = float(len(node_ids) + 1)
+    distances = {
+        source: {
+            target: float(distance)
+            for target, distance in nx.single_source_shortest_path_length(
+                graph, source
+            ).items()
+        }
+        for source in node_ids
+    }
+    neighborhoods = {
+        node: [
+            candidate for candidate in node_ids
+            if distances[node].get(candidate, unreachable) <= eps
+        ]
+        for node in node_ids
+    }
+    labels = {node: None for node in node_ids}
+    cluster_id = 0
+    for node in node_ids:
+        if labels[node] is not None:
+            continue
+        if len(neighborhoods[node]) < min_samples:
+            labels[node] = -1
+            continue
+        labels[node] = cluster_id
+        queue = list(neighborhoods[node])
+        queued = set(queue)
+        index = 0
+        while index < len(queue):
+            candidate = queue[index]
+            index += 1
+            if labels[candidate] == -1:
+                labels[candidate] = cluster_id
+            if labels[candidate] is not None:
+                continue
+            labels[candidate] = cluster_id
+            if len(neighborhoods[candidate]) >= min_samples:
+                for neighbor in neighborhoods[candidate]:
+                    if neighbor not in queued:
+                        queue.append(neighbor)
+                        queued.add(neighbor)
+        cluster_id += 1
+    established = sorted({label for label in labels.values() if label >= 0})
+    if not established:
+        labels = {node: 0 for node in node_ids}
+    else:
+        label_members = {
+            label: [node for node in node_ids if labels[node] == label]
+            for label in established
+        }
+        for node in node_ids:
+            if labels[node] != -1:
+                continue
+            labels[node] = min(
+                established,
+                key=lambda label: (
+                    min(distances[node].get(member, unreachable)
+                        for member in label_members[label]),
+                    label,
+                ),
+            )
+            label_members[labels[node]].append(node)
+        remap = {old: new for new, old in enumerate(sorted(set(labels.values())))}
+        labels = {node: remap[label] for node, label in labels.items()}
+    members = {}
+    for node in node_ids:
+        members.setdefault(labels[node], []).append(node)
+    heads = [
+        max(members[cid], key=lambda node: (graph.degree(node), -node))
+        for cid in sorted(members)
+    ]
+    roles = {
+        node: {
+            "dcsoc_role": "leaf",
+            "dcsoc_parent": None,
+            "dcsoc_children": [],
+            "dcsoc_core_neighbors": [],
+        }
+        for node in node_ids
+    }
+    structural_edges = []
+    for index, cid in enumerate(sorted(members)):
+        core = heads[index]
+        roles[core]["dcsoc_role"] = "core"
+        for member in sorted(members[cid]):
+            if member == core:
+                continue
+            roles[member]["dcsoc_parent"] = core
+            roles[core]["dcsoc_children"].append(member)
+            structural_edges.append([core, member])
+        if index:
+            parent_core = heads[index - 1]
+            roles[core]["dcsoc_parent"] = parent_core
+            roles[parent_core]["dcsoc_children"].append(core)
+            roles[parent_core]["dcsoc_core_neighbors"].append(core)
+            roles[core]["dcsoc_core_neighbors"].append(parent_core)
+            structural_edges.append([parent_core, core])
+    return heads, labels, members, roles, structural_edges
+
+
 def main():
     ap = argparse.ArgumentParser()
 
@@ -114,7 +235,7 @@ def main():
     configured_fanout = cfg.get("fanout")
     fanout = (
         None
-        if strategy == "cluster"
+        if strategy in {"cluster", "dcsoc"}
         or (strategy == "gossip" and configured_fanout is None)
         else int(configured_fanout if configured_fanout is not None else 3)
     )
@@ -308,10 +429,24 @@ def main():
 
     actual_nodes = g.number_of_nodes()
 
-    cluster_heads, cluster_of, members = assign_clusters(
-        actual_nodes,
-        num_clusters,
+    dcsoc_cfg = cfg.get("dcsoc", {})
+    dcsoc_eps = float(dcsoc_cfg.get("eps", DCSOC_EPS))
+    dcsoc_min_samples = int(
+        dcsoc_cfg.get("min_samples", DCSOC_MIN_SAMPLES)
     )
+    dcsoc_roles = {}
+    structural_edges = []
+    if strategy == "dcsoc":
+        (cluster_heads, cluster_of, members, dcsoc_roles,
+         structural_edges) = assign_dcsoc_clusters(
+            g, eps=dcsoc_eps, min_samples=dcsoc_min_samples
+        )
+        message_source = cluster_heads[0]
+    else:
+        cluster_heads, cluster_of, members = assign_clusters(
+            actual_nodes,
+            num_clusters,
+        )
 
     # ---------------------------------------------------
     # Build node metadata
@@ -358,6 +493,7 @@ def main():
             ],
 
             "gateway_neighbors": gateways,
+            **dcsoc_roles.get(node_id, {}),
         }
 
     # ---------------------------------------------------
@@ -392,6 +528,14 @@ def main():
         "fanout": fanout,
 
         "num_clusters": num_clusters,
+
+        "dcsoc": {
+            "eps": dcsoc_eps,
+            "min_samples": dcsoc_min_samples,
+            "master_id": cluster_heads[0] if strategy == "dcsoc" else None,
+            "structural_edges": structural_edges,
+            "dynamic_maintenance": False,
+        },
 
         "settle_time": settle_time,
 

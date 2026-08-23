@@ -1,0 +1,28 @@
+experiment: exp8_dcsoc
+strategy: dcsoc
+numNodes: 20
+numClusters: 4
+messageSource: 0
+settleTime: 15
+topology:
+  type: er
+  edgeProb: 0.2
+  baM: 2
+  seed: 42
+dcsoc:
+  eps: 2.0
+  min_samples: 3
+bottleneck:
+  enabled: true
+  target: ch_only
+  delayMs: 250
+failure:
+  mode: overload
+  triggerTime: 20
+  overloadDelayMs: 250
+  numEvents: 1
+  intervalSec: 1
+  targetType: cluster_head
+workload:
+  messageCount: 1
+  messageInterval: 0

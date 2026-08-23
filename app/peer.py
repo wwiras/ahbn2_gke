@@ -151,6 +151,12 @@ class PeerState:
                 [],
             )
         )
+        self.dcsoc_role = node_cfg.get("dcsoc_role", "leaf")
+        self.dcsoc_parent = node_cfg.get("dcsoc_parent")
+        self.dcsoc_children = list(node_cfg.get("dcsoc_children", []))
+        self.dcsoc_core_neighbors = list(
+            node_cfg.get("dcsoc_core_neighbors", [])
+        )
 
         # --------------------------------------------------
         # Exp8 bottleneck configuration
@@ -379,6 +385,26 @@ class PeerState:
         self,
         sender_id: int,
     ) -> list[int]:
+        # --------------------------------------------------
+        # DC-SoC static structural DAG
+        # --------------------------------------------------
+
+        if self.strategy == "dcsoc":
+            if self.dcsoc_role == "leaf":
+                parent = self.dcsoc_parent
+                if (
+                    parent is None
+                    or parent in (sender_id, self.peer_id)
+                    or parent in self.unavailable_neighbors
+                ):
+                    return []
+                return [parent]
+            return list(dict.fromkeys(
+                child for child in self.dcsoc_children
+                if child not in (sender_id, self.peer_id)
+                and child not in self.unavailable_neighbors
+            ))
+
         # --------------------------------------------------
         # Pure gossip
         # --------------------------------------------------
