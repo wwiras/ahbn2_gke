@@ -31,6 +31,19 @@ def log_event(**kwargs: Any) -> None:
     )
 
 
+class StandaloneObservationSink:
+    """No-op sink preventing standalone strategies from consuming AHBN inputs."""
+
+    def record_receive(self, **kwargs: Any) -> None:
+        return None
+
+    def record_join(self) -> None:
+        return None
+
+    def record_leave(self) -> None:
+        return None
+
+
 class PeerState:
     def __init__(self) -> None:
         self.hostname = socket.gethostname()
@@ -213,7 +226,11 @@ class PeerState:
         )
         # Fixed K1 normalization reference: one second one-hop processing and
         # transport delay maps to saturation. It is not experiment-tuned.
-        self.observations = KubernetesObservationAdapter(latency_max_seconds=1.0)
+        self.observations = (
+            KubernetesObservationAdapter(latency_max_seconds=1.0)
+            if self.strategy == "ahbn"
+            else StandaloneObservationSink()
+        )
         self.controller_lock = threading.Lock()
         self.unavailable_neighbors: set[int] = set()
 
@@ -337,10 +354,12 @@ class PeerState:
             members = list(dict.fromkeys(
                 n for n in self.cluster_members
                 if n not in (sender_id, self.peer_id)
+                and n not in self.unavailable_neighbors
             ))
             gateways = list(dict.fromkeys(
                 n for n in self.gateway_neighbors
                 if n not in (sender_id, self.peer_id)
+                and n not in self.unavailable_neighbors
             ))
             if fanout is None:
                 return list(dict.fromkeys(members + gateways))
@@ -349,7 +368,10 @@ class PeerState:
             selected.extend(n for n in members if n not in selected)
             selected.extend(n for n in gateways[1:] if n not in selected)
             return selected[:budget]
-        if self.cluster_head_id in (sender_id, self.peer_id):
+        if (
+            self.cluster_head_id in (sender_id, self.peer_id)
+            or self.cluster_head_id in self.unavailable_neighbors
+        ):
             return []
         return [self.cluster_head_id]
 
