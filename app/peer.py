@@ -393,7 +393,7 @@ class PeerState:
         candidates = [
             n
             for n in self.neighbors
-            if n != sender_id
+            if n != sender_id and n != self.peer_id
         ]
 
         k = min(
@@ -406,11 +406,9 @@ class PeerState:
                 random.sample(candidates, k)
             )
 
-        targets = [
-            t
-            for t in sorted(set(targets))
-            if t != self.peer_id and t != sender_id
-        ]
+        # Frozen v0.61 deduplicates while preserving the sampled order. Self
+        # is excluded before sampling so it cannot consume controller fanout.
+        targets = list(dict.fromkeys(targets))
 
         return targets
 
