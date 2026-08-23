@@ -28,6 +28,13 @@ message OverloadRequest {
   int32 delay_ms = 1;
 }
 
+message DCSOCMaintenanceRequest {
+  int32 node_id = 1;
+  bool available = 2;
+  bool explicit_du = 3;
+  string reason = 4;
+}
+
 message StatusReply {
   bool ready = 1;
   bool alive = 2;
@@ -44,5 +51,6 @@ service PeerService {
   rpc InjectOverload(OverloadRequest) returns (Ack);
   rpc ClearOverload(Empty) returns (Ack);
   rpc FailStop(Empty) returns (Ack);
+  rpc ApplyDCSOCMaintenance(DCSOCMaintenanceRequest) returns (Ack);
   rpc GetStatus(Empty) returns (StatusReply);
 }

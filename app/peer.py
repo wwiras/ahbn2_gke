@@ -15,6 +15,7 @@ import peer_pb2
 import peer_pb2_grpc
 from ahbn_controller import AHBNParams, AHBNState, CanonicalAHBNController
 from observations import KubernetesObservationAdapter
+from dcsoc_maintenance import DCSOCMaintenance
 
 
 def now() -> float:
@@ -239,6 +240,11 @@ class PeerState:
         )
         self.controller_lock = threading.Lock()
         self.unavailable_neighbors: set[int] = set()
+        self.dcsoc_maintenance = (
+            DCSOCMaintenance(topo)
+            if self.strategy == "dcsoc"
+            else None
+        )
 
         log_event(
             event="peer_started",
@@ -829,6 +835,32 @@ class PeerService(
                 self.state.seen_messages
             ),
         )
+
+    def ApplyDCSOCMaintenance(self, request, context):
+        maintenance = self.state.dcsoc_maintenance
+        if maintenance is None:
+            return peer_pb2.Ack(ok=False, message="not a DC-SoC peer")
+        if request.explicit_du:
+            maintenance.explicit_du(reason=request.reason or "explicit_du")
+            changed = True
+        else:
+            changed = maintenance.set_availability(
+                int(request.node_id), bool(request.available),
+                reason=request.reason or "availability",
+            )
+        maintenance.sync_peer(self.state)
+        if maintenance.events and changed:
+            log_event(
+                event="dcsoc_maintenance",
+                run_id=self.state.run_id,
+                experiment=self.state.experiment,
+                peer_id=self.state.peer_id,
+                **maintenance.events[-1],
+                core_replacement_count=maintenance.core_replacement_count,
+                recluster_count=maintenance.recluster_count,
+                rejoin_assignment_count=maintenance.rejoin_assignment_count,
+            )
+        return peer_pb2.Ack(ok=True, message="maintenance applied" if changed else "no transition")
 
 
 def serve() -> None:

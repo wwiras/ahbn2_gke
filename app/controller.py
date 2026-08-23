@@ -231,6 +231,34 @@ def apply_overload(peer_id: int, svc: str, ns: str, port: int, delay_ms: int) ->
     log_event(event="overload_requested", peer_id=peer_id, overload_ms=delay_ms)
 
 
+def broadcast_dcsoc_maintenance(
+    topo: dict, svc: str, ns: str, port: int, *, node_id: int = 0,
+    available: bool = True, explicit_du: bool = False,
+    include_affected: bool = False, reason: str,
+) -> None:
+    """Apply one authoritative event to every reachable DC-SoC peer."""
+    if topo.get("strategy") != "dcsoc":
+        return
+    for raw_peer_id in sorted(topo["nodes"], key=int):
+        peer_id = int(raw_peer_id)
+        if (not available and not explicit_du and peer_id == node_id
+                and not include_affected):
+            continue
+        try:
+            with grpc.insecure_channel(peer_addr(peer_id, svc, ns, port)) as channel:
+                stub = peer_pb2_grpc.PeerServiceStub(channel)
+                stub.ApplyDCSOCMaintenance(
+                    peer_pb2.DCSOCMaintenanceRequest(
+                        node_id=node_id, available=available,
+                        explicit_du=explicit_du, reason=reason,
+                    ),
+                    timeout=3,
+                )
+        except Exception as error:
+            log_event(event="dcsoc_maintenance_broadcast_failed", peer_id=peer_id,
+                      affected_node=node_id, reason=reason, error=str(error))
+
+
 def delete_peer_pod(peer_id: int, ns: str) -> None:
     config.load_incluster_config()
     v1 = client.CoreV1Api()
@@ -319,7 +347,23 @@ def run_churn(topo: dict, peer_svc: str, namespace: str, grpc_port: int) -> None
         )
 
         delete_peer_pod(target, namespace)
+        broadcast_dcsoc_maintenance(
+            topo, peer_svc, namespace, grpc_port, node_id=target,
+            available=False, reason="churn_leave",
+        )
         wait_for_peer_ready(target, peer_svc, namespace, grpc_port)
+        # The recreated pod starts from the static topology and did not receive
+        # the leave broadcast while it was absent. Replay that transition;
+        # surviving peers treat it idempotently, while the returning peer then
+        # rejoins as a leaf rather than reclaiming a former CORE role.
+        broadcast_dcsoc_maintenance(
+            topo, peer_svc, namespace, grpc_port, node_id=target,
+            available=False, include_affected=True, reason="churn_leave_replay",
+        )
+        broadcast_dcsoc_maintenance(
+            topo, peer_svc, namespace, grpc_port, node_id=target,
+            available=True, reason="churn_rejoin",
+        )
 
         log_event(
             event="churn_recovered",
@@ -558,6 +602,10 @@ def main() -> None:
 
             if mode in ("node_failure", "ch_failure"):
                 fail_stop_peer(target, peer_svc, namespace, grpc_port)
+                broadcast_dcsoc_maintenance(
+                    topo, peer_svc, namespace, grpc_port, node_id=target,
+                    available=False, reason=mode,
+                )
 
             elif mode == "overload":
                 apply_overload(target, peer_svc, namespace, grpc_port, overload_ms)
