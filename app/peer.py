@@ -13,6 +13,8 @@ import grpc
 
 import peer_pb2
 import peer_pb2_grpc
+from ahbn_controller import AHBNParams, AHBNState, CanonicalAHBNController
+from observations import KubernetesObservationAdapter
 
 
 def now() -> float:
@@ -81,34 +83,17 @@ class PeerState:
 
         self.source_id = topo["message_source"]
 
-        self.default_fanout = topo.get(
-            "fanout",
-            3,
+        # AHBN controller values are frozen in ControlSim v0.61.  Legacy
+        # topology overrides are intentionally ignored for strategy=ahbn.
+        self.ahbn_params = AHBNParams()
+        self.default_fanout = (
+            self.ahbn_params.default_fanout
+            if self.strategy == "ahbn"
+            else topo.get("fanout", 3)
         )
-
-        self.mode_threshold = topo.get(
-            "ahbn",
-            {},
-        ).get(
-            "mode_threshold",
-            0.5,
-        )
-
-        self.min_fanout = topo.get(
-            "ahbn",
-            {},
-        ).get(
-            "min_fanout",
-            1,
-        )
-
-        self.max_fanout = topo.get(
-            "ahbn",
-            {},
-        ).get(
-            "max_fanout",
-            6,
-        )
+        self.mode_threshold = self.ahbn_params.mode_threshold
+        self.min_fanout = self.ahbn_params.min_fanout
+        self.max_fanout = self.ahbn_params.max_fanout
 
         peer_key = str(self.peer_id)
 
@@ -213,18 +198,13 @@ class PeerState:
         self.forward_count = 0
 
         self.recv_count = 0
-
-        # --------------------------------------------------
-        # AHBN adaptive pressure state
-        # --------------------------------------------------
-
-        self.fail_pressure = 0.0
-
-        self.fail_decay = 0.85
-
-        self.fail_boost = 1.0
-
-        self.fail_threshold = 0.25
+        self.ahbn_controller = CanonicalAHBNController(self.ahbn_params)
+        self.ahbn_state = AHBNState(fanout=self.ahbn_params.default_fanout)
+        # Fixed K1 normalization reference: one second one-hop processing and
+        # transport delay maps to saturation. It is not experiment-tuned.
+        self.observations = KubernetesObservationAdapter(latency_max_seconds=1.0)
+        self.controller_lock = threading.Lock()
+        self.unavailable_neighbors: set[int] = set()
 
         log_event(
             event="peer_started",
@@ -278,218 +258,39 @@ class PeerState:
         if self.failed:
             return
 
-        dup_pressure = (
-            self.duplicate_count
-            / max(1, self.recv_count)
-        )
-
-        fail_pressure = self.fail_pressure
-
-        bottleneck_pressure = (
-            1.0
-            if self.bottleneck_active
-            else 0.0
-        )
-
-        overload_pressure = (
-            1.0
-            if self.overload_ms > 0
-            else 0.0
-        )
-
-        old_mode = self.mode
-        old_fanout = self.fanout
-        decision_trigger = ""
-        
-
-        # --------------------------------------------------
-        # Exp8 / overload reaction
-        # --------------------------------------------------
-
-        if (
-            fail_pressure > self.fail_threshold
-            or bottleneck_pressure > 0.0
-            or overload_pressure > 0.0
-        ):
-            # decision_trigger = "fail_pressure_high"
-            
-            if fail_pressure > self.fail_threshold:
-                decision_trigger = "failure_pressure"
-                
-            elif bottleneck_pressure > 0.0:
-                decision_trigger = "bottleneck"
-                
-            elif overload_pressure > 0.0:
-                decision_trigger = "overload"
-                
-            else:
-                decision_trigger = "emergency"
-            
-            self.mode = "gossip"
-
-            self.fanout = min(
-                self.max_fanout,
-                self.default_fanout + 1,
+        with self.controller_lock:
+            snapshot = self.observations.snapshot_and_reset(
+                overload_ms=self.overload_ms,
+                neighbor_count=len(self.neighbors),
             )
-
-        # --------------------------------------------------
-        # Duplicate-aware control
-        # --------------------------------------------------
-
-        elif dup_pressure > self.mode_threshold:
-            decision_trigger = "duplicate_ratio_high"
-            
-            self.mode = "cluster"
-
-            self.fanout = max(
-                self.min_fanout,
-                self.default_fanout - 1,
+            decision = self.ahbn_controller.update(
+                self.ahbn_state, snapshot.d, snapshot.l, snapshot.u, snapshot.c
             )
-
-        else:
-            decision_trigger = "normal_state"
-            self.mode = "gossip"
-
-            self.fanout = min(
-                self.max_fanout,
-                self.default_fanout + 1,
-            )
-            
+            self.mode, self.fanout = decision.mode, decision.fanout
         log_event(
-            event="adaptive_decision",
-
-            run_id=self.run_id,
-            peer_id=self.peer_id,
-
-            decision_trigger=decision_trigger,
-
-            duplicate_ratio=dup_pressure,
-            fail_pressure=fail_pressure,
-            bottleneck_pressure=bottleneck_pressure,
-            overload_pressure=overload_pressure,
-
-            duplicate_threshold=self.mode_threshold,
-            failure_threshold=self.fail_threshold,
-
-            mode_before=old_mode,
-            mode_after=self.mode,
-
-            fanout_before=old_fanout,
-            fanout_after=self.fanout,
-
-            is_cluster_head=self.is_cluster_head,
-        )
-
-        log_event(
-            event="adaptive_state",
-            run_id=self.run_id,
-            experiment=self.experiment,
-            peer_id=self.peer_id,
-            mode=self.mode,
-            fanout=self.fanout,
-            duplicate_count=self.duplicate_count,
-            recv_count=self.recv_count,
-            duplicate_ratio=dup_pressure,
-            fail_pressure=fail_pressure,
-            overload_pressure=overload_pressure,
-            bottleneck_pressure=bottleneck_pressure,
-            is_cluster_head=self.is_cluster_head,
+            event="ahbn_controller_trace", run_id=self.run_id,
+            experiment=self.experiment, peer_id=self.peer_id,
+            **decision.__dict__,
+            utilization_source="overload_emulation",
+            overload_active=self.overload_ms > 0,
             overload_ms=self.overload_ms,
-            bottleneck_active=self.bottleneck_active,
-            bottleneck_delay_ms=self.bottleneck_delay_ms,
-            failed=self.failed,
+            duplicate_window_received=snapshot.duplicate_window_received,
+            duplicate_window_duplicates=snapshot.duplicate_window_duplicates,
+            latency_window_count=snapshot.latency_window_count,
+            latency_raw=snapshot.latency_raw,
+            latency_normalized=snapshot.l,
+            churn_join_count=snapshot.churn_join_count,
+            churn_leave_count=snapshot.churn_leave_count,
+            neighbor_count=snapshot.neighbor_count,
         )
-
-        if self.mode != old_mode:
-            log_event(
-                event="mode_switched",
-                run_id=self.run_id,
-                experiment=self.experiment,
-                peer_id=self.peer_id,
-                old_mode=old_mode,
-                new_mode=self.mode,
-                duplicate_ratio=dup_pressure,
-                fail_pressure=fail_pressure,
-                overload_pressure=overload_pressure,
-                bottleneck_pressure=bottleneck_pressure,
-            )
-
-        if self.fanout != old_fanout:
-            log_event(
-                event="fanout_changed",
-                run_id=self.run_id,
-                experiment=self.experiment,
-                peer_id=self.peer_id,
-                old_fanout=old_fanout,
-                new_fanout=self.fanout,
-                duplicate_ratio=dup_pressure,
-                fail_pressure=fail_pressure,
-                overload_pressure=overload_pressure,
-                bottleneck_pressure=bottleneck_pressure,
-            )
 
     def trigger_failure_reaction(
         self,
         reason: str,
     ) -> None:
-        if self.strategy != "ahbn":
-            return
-
-        if self.failed:
-            return
-
-        old_mode = self.mode
-
-        old_fanout = self.fanout
-
-        self.fail_pressure = min(
-            1.0,
-            self.fail_pressure
-            + self.fail_boost,
-        )
-
-        self.mode = "gossip"
-
-        self.fanout = min(
-            self.max_fanout,
-            self.default_fanout + 1,
-        )
-
-        if self.mode != old_mode:
-            log_event(
-                event="mode_switched",
-                run_id=self.run_id,
-                experiment=self.experiment,
-                peer_id=self.peer_id,
-                old_mode=old_mode,
-                new_mode=self.mode,
-                reason=reason,
-                fail_pressure=self.fail_pressure,
-            )
-
-        if self.fanout != old_fanout:
-            log_event(
-                event="fanout_changed",
-                run_id=self.run_id,
-                experiment=self.experiment,
-                peer_id=self.peer_id,
-                old_fanout=old_fanout,
-                new_fanout=self.fanout,
-                reason=reason,
-                fail_pressure=self.fail_pressure,
-            )
-
-        log_event(
-            event="failure_reaction",
-            run_id=self.run_id,
-            experiment=self.experiment,
-            peer_id=self.peer_id,
-            fanout=self.fanout,
-            mode=self.mode,
-            fail_pressure=self.fail_pressure,
-            reason=reason,
-            is_cluster_head=self.is_cluster_head,
-        )
+        # A failed send is an observation source, never a controller bypass.
+        log_event(event="neighbor_unavailable_observed", run_id=self.run_id,
+                  peer_id=self.peer_id, reason=reason)
 
     def apply_bottleneck_delay(
         self,
@@ -519,24 +320,27 @@ class PeerState:
     def cluster_targets(
         self,
         sender_id: int,
+        fanout: int | None = None,
     ) -> list[int]:
-        targets: list[int] = []
-
         if self.is_cluster_head:
-            for n in (
-                self.cluster_members
-                + self.gateway_neighbors
-            ):
-                if n != sender_id:
-                    targets.append(n)
-
-        else:
-            if self.cluster_head_id != sender_id:
-                targets.append(
-                    self.cluster_head_id
-                )
-
-        return sorted(set(targets))
+            members = list(dict.fromkeys(
+                n for n in self.cluster_members
+                if n not in (sender_id, self.peer_id)
+            ))
+            gateways = list(dict.fromkeys(
+                n for n in self.gateway_neighbors
+                if n not in (sender_id, self.peer_id)
+            ))
+            if fanout is None:
+                return list(dict.fromkeys(members + gateways))
+            budget = max(1, int(fanout))
+            selected = gateways[:1]
+            selected.extend(n for n in members if n not in selected)
+            selected.extend(n for n in gateways[1:] if n not in selected)
+            return selected[:budget]
+        if self.cluster_head_id in (sender_id, self.peer_id):
+            return []
+        return [self.cluster_head_id]
 
     def target_peers(
         self,
@@ -581,7 +385,7 @@ class PeerState:
 
         if self.mode == "cluster":
             return self.cluster_targets(
-                sender_id
+                sender_id, fanout=self.fanout
             )
 
         targets: list[int] = []
@@ -602,27 +406,10 @@ class PeerState:
                 random.sample(candidates, k)
             )
 
-        # Preserve structural backbone
-
-        if self.is_cluster_head:
-            gw_candidates = [
-                n
-                for n in self.gateway_neighbors
-                if n != sender_id
-            ]
-
-            targets.extend(gw_candidates)
-
-        else:
-            if self.cluster_head_id != sender_id:
-                targets.append(
-                    self.cluster_head_id
-                )
-
         targets = [
             t
             for t in sorted(set(targets))
-            if t != self.peer_id
+            if t != self.peer_id and t != sender_id
         ]
 
         return targets
@@ -655,10 +442,9 @@ class PeerState:
 
                 if resp.ok:
                     self.forward_count += 1
-
-                    self.fail_pressure *= (
-                        self.fail_decay
-                    )
+                    if dst_peer in self.unavailable_neighbors:
+                        self.unavailable_neighbors.remove(dst_peer)
+                        self.observations.record_join()
 
                     log_event(
                         event="forward",
@@ -675,13 +461,15 @@ class PeerState:
                         bottleneck_active=self.bottleneck_active,
                         bottleneck_delay_ms=self.bottleneck_delay_ms,
                         is_cluster_head=self.is_cluster_head,
-                        fail_pressure=self.fail_pressure,
                     )
 
                 else:
                     self.trigger_failure_reaction(
                         reason="forward_rejected"
                     )
+                    if dst_peer not in self.unavailable_neighbors:
+                        self.unavailable_neighbors.add(dst_peer)
+                        self.observations.record_leave()
 
                     log_event(
                         event="forward_rejected",
@@ -690,13 +478,15 @@ class PeerState:
                         peer_id=self.peer_id,
                         dst_peer=dst_peer,
                         message_id=envelope.message_id,
-                        fail_pressure=self.fail_pressure,
                     )
 
         except Exception as e:
             self.trigger_failure_reaction(
                 reason="forward_failed"
             )
+            if dst_peer not in self.unavailable_neighbors:
+                self.unavailable_neighbors.add(dst_peer)
+                self.observations.record_leave()
 
             log_event(
                 event="forward_failed",
@@ -706,7 +496,6 @@ class PeerState:
                 dst_peer=dst_peer,
                 message_id=envelope.message_id,
                 error=str(e),
-                fail_pressure=self.fail_pressure,
             )
 
     def process_envelope(
@@ -727,11 +516,19 @@ class PeerState:
         with self.lock:
             self.recv_count += 1
 
+            one_hop_latency = max(
+                0.0, now() - (envelope.sent_at or envelope.created_at)
+            )
+
             if (
                 envelope.message_id
                 in self.seen_messages
             ):
                 self.duplicate_count += 1
+                self.observations.record_receive(
+                    duplicate=True, latency_seconds=one_hop_latency
+                )
+                self.adaptive_update()
 
                 log_event(
                     event="received_duplicate",
@@ -761,6 +558,13 @@ class PeerState:
             time.sleep(
                 self.overload_ms / 1000.0
             )
+
+        one_hop_latency = max(
+            0.0, now() - (envelope.sent_at or envelope.created_at)
+        )
+        self.observations.record_receive(
+            duplicate=False, latency_seconds=one_hop_latency
+        )
 
         # Bottleneck/overload delay is applied through overload_ms only.
         # This avoids double-counting delay and ensures the bottleneck
@@ -803,6 +607,7 @@ class PeerState:
             sender_id=self.peer_id,
             created_at=envelope.created_at,
             hop=envelope.hop + 1,
+            sent_at=now(),
         )
 
         for dst in targets:
@@ -851,13 +656,15 @@ class PeerService(
                 message="peer failed",
             )
 
+        started_at = now()
         env = peer_pb2.Envelope(
             run_id=request.run_id,
             message_id=request.message_id,
             source_id=self.state.source_id,
             sender_id=self.state.peer_id,
-            created_at=now(),
+            created_at=started_at,
             hop=0,
+            sent_at=started_at,
         )
 
         log_event(

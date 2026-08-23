@@ -16,6 +16,7 @@ message Envelope {
   int32 sender_id = 4;
   double created_at = 5;
   int32 hop = 6;
+  double sent_at = 7;
 }
 
 message StartRequest {
