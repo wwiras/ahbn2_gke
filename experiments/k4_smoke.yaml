@@ -1,0 +1,21 @@
+experiment: k4_smoke
+strategy: gossip
+numNodes: 2
+
+topology:
+  type: ba
+  baM: 1
+  seed: 42
+
+workload:
+  messageCount: 0
+  messageInterval: 0
+
+failure:
+  mode: none
+  numEvents: 0
+  overloadDelayMs: 0
+
+bottleneck:
+  enabled: false
+  delayMs: 0

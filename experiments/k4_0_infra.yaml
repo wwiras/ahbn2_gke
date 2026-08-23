@@ -1,0 +1,21 @@
+experiment: k4_0_infra
+strategy: gossip
+numNodes: 8
+
+topology:
+  type: ba
+  baM: 2
+  seed: 42
+
+workload:
+  messageCount: 0
+  messageInterval: 0
+
+failure:
+  mode: none
+  numEvents: 0
+  overloadDelayMs: 0
+
+bottleneck:
+  enabled: false
+  delayMs: 0
