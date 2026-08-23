@@ -5,6 +5,7 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   serviceName: {{ .Values.service.name }}
+  podManagementPolicy: {{ .Values.podManagementPolicy }}
   replicas: {{ .Values.numNodes }}
   selector:
     matchLabels:

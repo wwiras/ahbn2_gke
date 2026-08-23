@@ -1,0 +1,11 @@
+experiment: k5_structured_seed42_factor1.0
+strategy: cluster
+numNodes: 20
+numClusters: 4
+messageSource: 0
+settleTime: 18.0
+topology: {type: ba, baM: 2, seed: 42}
+failure: {mode: bottleneck, triggerTime: 0.5, overloadDelayMs: 700}
+workload: {messageCount: 20, messageInterval: 0.4}
+bottleneck: {enabled: true, target: important_peer, delayMs: 700}
+k5: {algorithm: structured, seed: 42, overload_factor: 1.0, overload_delay_ms: 700}

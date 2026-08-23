@@ -451,6 +451,13 @@ def run_bottleneck(
             v.get("is_cluster_head", False)
         )
 
+        if target_type == "important_peer":
+            # Deterministic experiment-harness selection.  The algorithm is
+            # not told why this peer was selected.  Select natively important
+            # forwarding state for each strategy; a native CH/CORE may also be
+            # the paired source and remains a meaningful processing target.
+            continue
+
         if target_type == "ch_only":
             if is_ch:
                 targets.append(peer_id)
@@ -461,6 +468,47 @@ def run_bottleneck(
 
         elif target_type == "all":
             targets.append(peer_id)
+
+    if target_type == "important_peer":
+        strategy = str(topo.get("strategy", ""))
+        source = int(topo.get("message_source", -1))
+        eligible = [int(k) for k in nodes if int(k) != source]
+        if strategy == "dcsoc":
+            cores = [
+                int(k) for k, node in nodes.items()
+                if node.get("dcsoc_role") == "core"
+            ]
+            eligible = cores or eligible
+            role = "MASTER/CORE"
+            basis = "highest-degree DC-SoC CORE"
+        elif strategy == "cluster":
+            heads = [
+                int(k) for k, node in nodes.items()
+                if bool(node.get("is_cluster_head", False))
+            ]
+            eligible = heads or eligible
+            role = "CH"
+            basis = "highest-degree Structured CH"
+        else:
+            role = "high-connectivity forwarding peer"
+            basis = "highest-degree non-source BA peer"
+        if eligible:
+            targets = [max(
+                eligible,
+                key=lambda peer_id: (
+                    len(nodes[str(peer_id)].get("neighbors", [])),
+                    -peer_id,
+                ),
+            )]
+            log_event(
+                event="overload_target_selected",
+                run_id=topo["run_id"],
+                strategy=strategy,
+                peer_id=targets[0],
+                role=role,
+                selection_basis=basis,
+                seed=topo.get("seed"),
+            )
 
     if not targets:
         raise RuntimeError(

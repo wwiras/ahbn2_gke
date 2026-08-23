@@ -4,6 +4,7 @@ image: ""
 imagePullPolicy: Always
 
 numNodes: 20
+podManagementPolicy: OrderedReady
 grpcPort: 50051
 
 experiment:

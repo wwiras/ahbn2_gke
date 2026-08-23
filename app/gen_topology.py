@@ -441,7 +441,11 @@ def main():
          structural_edges) = assign_dcsoc_clusters(
             g, eps=dcsoc_eps, min_samples=dcsoc_min_samples
         )
-        message_source = cluster_heads[0]
+        # Legacy DC-SoC experiments inject at the first CORE.  K5 pairs the
+        # environmental source across strategies; a leaf source already has a
+        # faithful upward path to its parent CORE in the frozen forwarding DAG.
+        if not bool(dcsoc_cfg.get("preserve_message_source", False)):
+            message_source = cluster_heads[0]
     else:
         cluster_heads, cluster_of, members = assign_clusters(
             actual_nodes,
@@ -581,6 +585,8 @@ def main():
                 message_interval,
         },
 
+        "k5": cfg.get("k5", {}),
+
         # -----------------------------------------------
         # AHBN parameters
         # -----------------------------------------------
@@ -588,9 +594,11 @@ def main():
         "ahbn": {
             "mode_threshold": 0.5,
 
-            "min_fanout": 1,
+            "min_fanout": 2,
 
-            "max_fanout": 6,
+            "max_fanout": 4,
+
+            "default_fanout": 3,
         },
 
         # -----------------------------------------------

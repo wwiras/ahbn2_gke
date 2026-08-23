@@ -11,10 +11,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_TS="$(date +%Y%m%d_%H%M%S)"
 EXP_NAME="$(basename "$CONFIG" .yaml)"
 RUN_ID="${EXP_NAME}-${OUT_TS}"
-OUTDIR="${ROOT_DIR}/outputs/${RUN_ID}"
+OUTDIR="${OUTDIR:-${ROOT_DIR}/outputs/${RUN_ID}}"
 NAMESPACE="${NAMESPACE:-ahbn-exp10}"
 RELEASE="${RELEASE:-ahbn}"
 IMAGE="${IMAGE:-}"
+PYTHON="${PYTHON:-python}"
+POD_MANAGEMENT_POLICY="${POD_MANAGEMENT_POLICY:-OrderedReady}"
 
 mkdir -p "${OUTDIR}"
 
@@ -27,27 +29,25 @@ fi
 collect_debug() {
   echo "[debug] Collecting diagnostics ..."
   kubectl -n "${NAMESPACE}" get pods -o wide > "${OUTDIR}/pods.txt" 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" get pods -l app=ahbn-peer -o json > "${OUTDIR}/pods.json" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" get statefulset peer > "${OUTDIR}/statefulset.txt" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" describe statefulset peer > "${OUTDIR}/statefulset_describe.txt" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" logs job/ahbn-controller > "${OUTDIR}/controller.log" 2>/dev/null || true
 
-  : > "${OUTDIR}/logs.jsonl"
-  for p in $(kubectl -n "${NAMESPACE}" get pods -l app=ahbn-peer -o name 2>/dev/null | sort); do
-    kubectl -n "${NAMESPACE}" logs "${p}" >> "${OUTDIR}/logs.jsonl" 2>/dev/null || true
-    kubectl -n "${NAMESPACE}" logs "${p}" --previous >> "${OUTDIR}/logs.jsonl" 2>/dev/null || true
-  done
+  kubectl -n "${NAMESPACE}" logs -l app=ahbn-peer --all-containers=true \
+    --max-log-requests=20 --tail=-1 > "${OUTDIR}/logs.jsonl" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" logs job/ahbn-controller >> "${OUTDIR}/logs.jsonl" 2>/dev/null || true
 }
 
 trap 'collect_debug' EXIT
 
 echo "[1] Generate topology"
-python "${ROOT_DIR}/app/gen_topology.py" \
+"${PYTHON}" "${ROOT_DIR}/app/gen_topology.py" \
   --config "${ROOT_DIR}/${CONFIG}" \
   --out "${OUTDIR}/topology.json"
 
 echo "[debug] Inspect generated topology"
-python - <<PY
+"${PYTHON}" - <<PY
 import json
 with open("${OUTDIR}/topology.json", "r", encoding="utf-8") as f:
     topo = json.load(f)
@@ -59,7 +59,7 @@ print("=== WORKLOAD CONFIG ===")
 print(json.dumps(topo.get("workload"), indent=2))
 PY
 
-NUM_NODES="$(python - <<PY
+NUM_NODES="$("${PYTHON}" - <<PY
 import json
 with open("${OUTDIR}/topology.json", "r", encoding="utf-8") as f:
     topo = json.load(f)
@@ -80,6 +80,7 @@ helm install "${RELEASE}" "${ROOT_DIR}/helm/ahbn" \
   --set namespace="${NAMESPACE}" \
   --set image="${IMAGE}" \
   --set numNodes="${NUM_NODES}" \
+  --set podManagementPolicy="${POD_MANAGEMENT_POLICY}" \
   --set controller.enabled=false
 
 echo "[5] Wait for StatefulSet rollout"
@@ -108,6 +109,13 @@ kubectl -n "${NAMESPACE}" wait \
 echo "[10] Collect logs"
 collect_debug
 
+if [ "${SKIP_PLOT:-0}" = "1" ]; then
+  echo "[11] Plot results: skipped by caller"
+  echo "DONE -> ${OUTDIR}"
+  trap - EXIT
+  exit 0
+fi
+
 echo "[11] Plot results"
 PLOT_SCRIPT="${ROOT_DIR}/app/plot_exp10.py"
 if [ "${EXP_NAME}" = "exp11" ]; then
@@ -115,7 +123,7 @@ if [ "${EXP_NAME}" = "exp11" ]; then
 elif [ "${EXP_NAME}" = "exp12" ]; then
   PLOT_SCRIPT="${ROOT_DIR}/app/plot_exp12.py"
 fi
-python "${PLOT_SCRIPT}" \
+"${PYTHON}" "${PLOT_SCRIPT}" \
   --log "${OUTDIR}/logs.jsonl" \
   --expected-nodes "${NUM_NODES}" \
   --outdir "${OUTDIR}"
