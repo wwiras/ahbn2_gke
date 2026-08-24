@@ -378,3 +378,372 @@ GKE preserved: PASS
 Final status:
 K5 STOPPED — K5.0 runtime image publication authorization required
 ```
+
+---
+
+# K5 Continuation Update — 2026-08-24
+
+This section supersedes the previous continuation gate summary for the current K5 status while preserving the earlier stopped-gate record above as execution history.
+
+## Updated source and runtime image
+
+Before rebuilding the K5 runtime image, the repository was checked:
+
+```text
+$ git status --short
+(no output)
+
+$ git rev-parse HEAD
+425bf10589c88bb05a45922561e5c0a8032b0605
+```
+
+PASS: the repository was clean and the K5-corrected source was built from commit:
+
+```text
+425bf10589c88bb05a45922561e5c0a8032b0605
+```
+
+The runtime image was intentionally published under:
+
+```text
+wwiras/ahbn2-peer:v3
+```
+
+Docker Hub push result:
+
+```text
+v3: digest: sha256:c083aace8ff051573c741c9a7618087f899f6bd830297df424ef7418dd3712c6 size: 2408
+```
+
+Published image verification:
+
+```text
+Name:      docker.io/wwiras/ahbn2-peer:v3
+MediaType: application/vnd.docker.distribution.manifest.v2+json
+Digest:    sha256:c083aace8ff051573c741c9a7618087f899f6bd830297df424ef7418dd3712c6
+```
+
+### Updated runtime image gate
+
+```text
+K5.0 runtime image publication: PASS
+Image: wwiras/ahbn2-peer:v3
+Digest: sha256:c083aace8ff051573c741c9a7618087f899f6bd830297df424ef7418dd3712c6
+Source commit: 425bf10589c88bb05a45922561e5c0a8032b0605
+```
+
+The previous image-publication authorization blocker is therefore RESOLVED.
+
+## GKE restart / readiness
+
+The GKE cluster was created using:
+
+```text
+scripts/setup_gke.sh
+```
+
+Observed cluster:
+
+```text
+NAME              LOCATION       MASTER_VERSION       MACHINE_TYPE  NUM_NODES  STATUS
+bcgossip-cluster  us-central1-a  1.35.6-gke.1641000  e2-medium     7          RUNNING
+```
+
+All seven nodes reached `Ready`.
+
+Gate:
+
+```text
+GKE reachable: PASS
+7/7 nodes Ready: PASS
+```
+
+## K5 smoke execution
+
+Smoke command:
+
+```text
+IMAGE=wwiras/ahbn2-peer:v3 \
+./scripts/run_k5_exp08.sh smoke
+```
+
+Smoke output root:
+
+```text
+/Users/wwiras/Documents/src/AHBN_GKEProj/ahbn2_gke/outputs/k5_exp08-20260824_113523
+```
+
+The smoke run executed exactly one condition for each comparator, in the required order:
+
+```text
+Gossip -> Structured -> DC-SoC -> AHBN
+seed=42
+overload_factor=1.0
+overload_delay_ms=700
+```
+
+### Smoke results
+
+| Algorithm | Delivery ratio | Propagation delay (s) | Duplicates | Total forwards | AHBN trace rows | DC-SoC maintenance |
+|---|---:|---:|---:|---:|---:|---:|
+| Gossip | 1.0000 | 0.658093 | 32 | 302 | 0 | 0 |
+| Structured | 1.0000 | 0.669261 | 0 | 295 | 0 | 0 |
+| DC-SoC | 1.0000 | 0.813742 | 0 | 224 | 0 | 0 |
+| AHBN | 0.4875 | 0.644628 | 127 | 165 | 322 | 0 |
+
+Per-stage harness result:
+
+```text
+Gossip:     1/1 PASS
+Structured: 1/1 PASS
+DC-SoC:     1/1 PASS
+AHBN:       1/1 PASS
+```
+
+Important interpretation: the harness PASS confirms runtime/contract validity. It does not by itself establish that the AHBN delivery result is scientifically acceptable.
+
+## Critical semantic smoke gates
+
+### SLOW != FAILED
+
+PASS.
+
+For the AHBN smoke run, all 20 peers reported:
+
+```text
+ready=true
+alive=true
+```
+
+The overloaded AHBN target was peer 4:
+
+```text
+target_peer_id=4
+target_role=high-connectivity forwarding peer
+seen_count=20
+ready=true
+alive=true
+```
+
+Therefore the overloaded peer remained alive and reachable. The observed AHBN delivery reduction was not caused by pod death or failure semantics.
+
+### DC-SoC overload must not trigger maintenance
+
+PASS.
+
+Observed:
+
+```text
+dcsoc_maintenance=0
+```
+
+The overload-only condition did not trigger DC-SoC failure recovery / structural maintenance.
+
+### AHBN controller activity
+
+PASS.
+
+Observed:
+
+```text
+ahbn_trace_rows=322
+```
+
+The AHBN controller was active during the smoke run.
+
+## AHBN smoke anomaly / scientific hold
+
+Although the AHBN run completed mechanically, its delivery ratio was:
+
+```text
+0.4875
+```
+
+The final AHBN peer statuses showed strongly uneven dissemination:
+
+```text
+peer-0   seen=20
+peer-1   seen=20
+peer-2   seen=19
+peer-3   seen=3
+peer-4   seen=20
+peer-5   seen=20
+peer-6   seen=3
+peer-7   seen=6
+peer-8   seen=7
+peer-9   seen=3
+peer-10  seen=7
+peer-11  seen=19
+peer-12  seen=19
+peer-13  seen=4
+peer-14  seen=2
+peer-15  seen=1
+peer-16  seen=19
+peer-17  seen=1
+peer-18  seen=1
+peer-19  seen=1
+```
+
+Total observed deliveries:
+
+```text
+195 / (20 peers x 20 messages) = 195 / 400 = 0.4875
+```
+
+All peers were alive and Ready. This therefore indicates real dissemination reachability loss rather than a Kubernetes/pod-health failure or an aggregation error.
+
+## Canonical AHBN fanout concern
+
+The K5 smoke result exposed a broader issue already observed in the control simulator.
+
+Canonical AHBN parameters remain:
+
+```text
+min_fanout=2
+max_fanout=4
+default_fanout=3
+beta=1.0
+```
+
+The canonical fanout calculation is effectively:
+
+```text
+span = max_fanout - min_fanout
+raw_fanout = min_fanout + beta * weight * span
+fanout = round(raw_fanout)
+```
+
+With the frozen `[2,4]` range:
+
+```text
+raw_fanout = 2 + 2 * weight
+```
+
+A broad central weight range therefore quantizes to fanout 3.
+
+Historical control-simulator evidence must now be treated as part of the gate:
+
+```text
+Exp07: runtime AHBN fanout observed at 3
+Exp08: mode transitions occurred, but fanout remained 3 / no fanout transitions
+Exp09: historical logs to be audited
+K5 Exp08 smoke: final peer statuses again report fanout=3
+```
+
+This raises two related scientific questions:
+
+1. Is the canonical weight-to-fanout mapping operationally capable of producing fanout changes under the observation ranges actually encountered?
+2. When AHBN is in Structured/cluster mode, does applying the bounded AHBN fanout truncate structural forwarding sufficiently to reduce coverage?
+
+These are canonical-design questions and must be resolved from existing control-simulator/K1-K3 evidence before any AHBN code or parameter is changed.
+
+## Required next step — Canonical AHBN Fanout Activation Audit
+
+The formal K5 campaign is now deliberately placed on HOLD.
+
+The next step is a read-only/local audit using preserved traces. No GKE cluster is required.
+
+Audit scope:
+
+```text
+Exp07 control simulator
+    -> weight min/max
+    -> fanout min/max
+    -> fanout transitions
+
+Exp08 control simulator
+    -> weight min/max
+    -> fanout min/max
+    -> fanout transitions
+    -> mode transitions
+
+Exp09 control simulator
+    -> weight min/max
+    -> fanout min/max
+    -> fanout transitions
+
+K5 Exp08 smoke
+    -> weight min/max
+    -> fanout distribution
+    -> fanout transitions
+    -> mode distribution
+```
+
+Primary decision:
+
+```text
+Does the frozen canonical AHBN fanout mechanism actually activate
+outside fanout=3 under the tested observation ranges?
+```
+
+No AHBN tuning, max-fanout increase, weight change, beta change, threshold change, or forwarding change is authorized at this stage.
+
+## GKE usage during audit
+
+The fanout audit uses already-collected local logs/results, so GKE does not need to remain running.
+
+The cluster may be torn down during this investigation to avoid unnecessary cloud cost. Cluster teardown completion should be recorded separately when performed.
+
+## Updated K5 stage status
+
+```text
+K5.0 configuration matrix: PASS
+K5.0 semantic regression: 80/80 PASS
+K5.0 runtime image publication: PASS
+Runtime image: wwiras/ahbn2-peer:v3
+Runtime digest: sha256:c083aace8ff051573c741c9a7618087f899f6bd830297df424ef7418dd3712c6
+Source commit: 425bf10589c88bb05a45922561e5c0a8032b0605
+
+GKE smoke prerequisite: PASS
+7/7 nodes Ready: PASS
+
+K5 smoke — Gossip: PASS
+K5 smoke — Structured: PASS
+K5 smoke — DC-SoC: PASS
+K5 smoke — AHBN runtime/contract: PASS
+
+SLOW != FAILED: PASS
+DC-SoC overload-triggered maintenance: PASS (0 events)
+AHBN controller active: PASS (322 trace rows)
+Canonical AHBN unchanged: PASS
+
+AHBN smoke delivery sanity: HOLD / INVESTIGATE
+Observed AHBN delivery ratio: 0.4875
+All 20 AHBN peers alive/Ready: PASS
+Observed AHBN final fanout: 3
+Historical fanout activation concern: OPEN
+
+K5.1 Gossip formal campaign: NOT RUN
+K5.2 Structured formal campaign: NOT RUN
+K5.3 DC-SoC formal campaign: NOT RUN
+K5.4 AHBN formal campaign: NOT RUN
+K5.5 Cross-comparator reconciliation: NOT RUN
+K5.6 Statistical aggregation: NOT RUN
+K5.7 Plotting: NOT RUN
+K5.8 Scientific analysis: IN PROGRESS — fanout activation audit required first
+K5.9 Final regression/documentation: NOT RUN
+
+Current final status:
+K5 HOLD — SMOKE RUNTIME PASSED; CANONICAL AHBN FANOUT ACTIVATION AUDIT REQUIRED BEFORE FORMAL 80-RUN EXECUTION
+```
+
+## Current continuation rule
+
+Do not launch:
+
+```text
+IMAGE=wwiras/ahbn2-peer:v3 ./scripts/run_k5_exp08.sh formal
+```
+
+until the canonical fanout activation audit is complete and the existing frozen semantics are classified as either:
+
+```text
+A. intended canonical behavior -> preserve implementation and continue with scientifically justified interpretation
+
+or
+
+B. canonical design / implementation mismatch -> correct before formal K5, run regression, rebuild image, and repeat smoke
+```
+
+The investigation must first use existing evidence. It must not tune AHBN simply to improve the observed K5 delivery result.
+
