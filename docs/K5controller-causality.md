@@ -412,3 +412,30 @@ old_evidence_still_exists=YES
 - [x] Correct project paths are now recorded
 
 **STAGE B OUTPUT LOCATION CORRECTION — PASS**
+
+# Stage C — Observation Semantics Audit
+
+Stage C audited the preserved 322-state K5 Exp08 trace at commit `e3b8ed46849bc5eb7eb05a3ecf3d167735669f61`; it did not rerun K5 or access GKE. Complete evidence tables and reconstruction data are under `outputs/k5_controller_observation_stageC/`.
+
+## Result
+
+The raw observation formula and peer-local EWMA were independently reconstructed for all four signals and every controller row. Maximum error was exactly zero and mismatch count was zero for `raw_d`, `raw_l`, `raw_u`, `raw_c`, `d_hat`, `l_hat`, `u_hat`, and `c_hat`. Each peer begins with four zero EWMAs and applies `hat = 0.3 raw + 0.7 previous_hat`; no resets or stale cross-peer state were found.
+
+| Signal | Actual meaning | Exp08 behaviour | Verdict |
+| --- | --- | --- | --- |
+| Duplicate | Local interval `duplicates / receives`; seen `message_id` defines duplicate | Target receive stream is duplicate-heavy | EXPECTED |
+| Latency | Mean local one-hop `now - sent_at` in seconds, capped against 1 second | Includes target sleep for new messages but not early-return duplicates | SUSPICIOUS |
+| Utilization | Binary local `overload_ms > 0` emulation state, not CPU/queue telemetry | Target raw_u=1 throughout active rows; EWMA approaches 1 | EXPECTED |
+| Churn | Local `(joins+leaves)/neighbor_count`, capped at 1 | No active-period joins/leaves; EWMA decays toward zero | EXPECTED |
+
+The K5 harness waits 0.5 seconds, then selects the highest-degree eligible non-source forwarding peer. In the AHBN seed-42 factor-1.0 trace it selects peer 4 and injects 700 ms. Peer 4 is not a topology cluster head; the preserved experiment therefore overloads a high-connectivity forwarding peer despite the broad “CH overload” description. All 73 `overload_active=true` controller rows and all 72 `cluster + fanout 2` rows belong to peer 4. None of the other 19 peers produces fanout 2.
+
+The low cluster+2 latency mean is explained by path semantics rather than a unit error. Of the 72 rows, 17 are new-message samples above 0.6 seconds and 55 are duplicate samples below 0.1 seconds. New messages sleep for 700 ms before latency is recorded; duplicates are classified, observed, and returned before that sleep. The 1-second normalization and alpha-0.3 EWMA yield mean `l_hat=0.161186`. This pipeline is internally correct but is a path-dependent measure of overload delay, hence the conservative SUSPICIOUS verdict.
+
+The high utilization value is intentionally synthetic. `InjectOverload` sets local `overload_ms=700`; the adapter maps any positive value to `raw_u=1`; repeated active updates make `u_hat` converge to 1, producing cluster+2 mean `u_hat=0.967593`. It cannot distinguish overload magnitudes and provides no evidence about measured CPU, queue depth, or busy ratio. Such resource claims require instrumentation.
+
+The duplicate mean is supported directly: 55/72 cluster+2 windows contain one duplicate out of one receive, so the peer-local EWMA remains high (`d_hat=0.769544`). Churn is accurately near zero: active rows contain no join/leave observations, raw_c remains zero, and residual state decays (`c_hat=0.000972`).
+
+No concrete observation-generation defect, normalization error, unit mismatch, scope leak, or EWMA defect was established. The remaining primary question is controller interpretation: correctly high utilization favors cluster through `w_u=-1`, while correctly absent churn favors cluster through `w_c=+1`. Those sign/weight questions are explicitly deferred to Stage D.
+
+STAGE C PASS — OBSERVATIONS SOUND; CONTROLLER INTERPRETATION REQUIRES AUDIT
