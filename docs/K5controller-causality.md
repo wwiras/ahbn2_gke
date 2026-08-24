@@ -439,3 +439,37 @@ The duplicate mean is supported directly: 55/72 cluster+2 windows contain one du
 No concrete observation-generation defect, normalization error, unit mismatch, scope leak, or EWMA defect was established. The remaining primary question is controller interpretation: correctly high utilization favors cluster through `w_u=-1`, while correctly absent churn favors cluster through `w_c=+1`. Those sign/weight questions are explicitly deferred to Stage D.
 
 STAGE C PASS — OBSERVATIONS SOUND; CONTROLLER INTERPRETATION REQUIRES AUDIT
+
+
+# Stage D — Controller Interpretation Audit
+
+Stage D used the preserved 322 controller states only; it did not rerun K5, access GKE, or modify controller semantics. Preflight ran from the authoritative GKE repository at HEAD `012f653434e1459be45e9679d2cb9762fef58a75` with an initially clean status and the mandated Python 3.14.6 interpreter.
+
+## Intended interpretation and directionality
+
+Higher score/weight selects Gossip and can increase fanout; lower score/weight selects Cluster and can decrease fanout. This source-level meaning is decisive when combined with `docs/exp8.md`, which explicitly expects bottleneck pressure to increase Gossip orientation, alternative dissemination aggressiveness, and fanout. The tested target is precisely a **high-connectivity forwarding peer**, peer 4, not a topology cluster head.
+
+| Signal | Sign | High signal pushes | Scientific verdict |
+|---|---:|---|---|
+| duplicates | -1 | Cluster | SUPPORTED qualitatively; magnitude/reference unproven |
+| latency | +1 | Gossip | SUPPORTED independently of Stage C measurement incompleteness |
+| local overload | -1 | Cluster | CONTRADICTED by explicit Exp8/Exp12 design intent |
+| churn | +1 | Gossip | SUPPORTED qualitatively; baseline/influence unproven |
+
+The utilization result is not based on a generic assumption that Gossip is always preferable. Local load shedding could scientifically motivate Cluster/lower fanout, but that is not the behaviour declared by this project's bottleneck experiments. Project evidence resolves the competing objectives in favour of Gossip/path diversity and increased aggressiveness for Exp8/Exp12.
+
+## Reference, influence, and interactions
+
+The four observations are unipolar intensities. A shared reference of 0.5 converts absence into a strong opposite vote: no overload contributes +0.5 toward Gossip and no churn contributes -0.5 toward Cluster. Therefore `c_hat≈0` means no churn evidence, not inherently maximum Cluster evidence, and `u_hat≈0` means no overload evidence, not Gossip evidence. No explicit scientific justification was found for common 0.5 references or equal coefficient magnitudes.
+
+Additivity creates problematic overload interactions: low churn, high duplicates, and path-incomplete low latency all reinforce Cluster during the preserved overload condition. The same scalar also couples mode selection to fanout, so overload currently selects Cluster and reduces fanout despite the documented Exp8 expectation of Gossip and fanout escalation. Findings separate Class A direction, Class B baseline/reference, and Class C interaction/coupling issues.
+
+## Preserved-state counterfactuals
+
+For the original 72 cluster+2 states: CF0 stays 72 cluster+2; CF1 (remove utilization) becomes 40 cluster+2 and 32 cluster+3; CF2 (reverse utilization) becomes 5 cluster+2 and 67 cluster+3; CF3 (remove churn) becomes 36 cluster+2 and 36 cluster+3; CF4 (remove latency) becomes 66 cluster+2 and 6 cluster+3; CF5 (reverse utilization and remove churn) becomes 54 cluster+3 and 18 gossip+3. These are offline diagnostics, not replacement-controller proposals. Complete per-state and all-state counts are in `outputs/k5_controller_interpretation_stageD/`.
+
+## Stage E design requirement
+
+A valid Stage E correction must preserve defensible duplicate/churn directionality; make genuine local bottleneck evidence produce the explicitly intended bottleneck response; avoid treating absence of unrelated unipolar pressures as dominant opposite evidence without justification; resolve condition dominance coherently; and make mode and fanout responses scientifically separable or demonstrably aligned. Stage D does not prescribe final weights.
+
+STAGE D PASS — MULTIPLE CONTROLLER INTERPRETATION ISSUES IDENTIFIED
