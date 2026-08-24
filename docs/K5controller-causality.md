@@ -473,3 +473,54 @@ For the original 72 cluster+2 states: CF0 stays 72 cluster+2; CF1 (remove utiliz
 A valid Stage E correction must preserve defensible duplicate/churn directionality; make genuine local bottleneck evidence produce the explicitly intended bottleneck response; avoid treating absence of unrelated unipolar pressures as dominant opposite evidence without justification; resolve condition dominance coherently; and make mode and fanout responses scientifically separable or demonstrably aligned. Stage D does not prescribe final weights.
 
 STAGE D PASS — MULTIPLE CONTROLLER INTERPRETATION ISSUES IDENTIFIED
+
+
+# Stage E — Minimal Controller Correction and Offline Validation
+
+## Result
+
+**STAGE E PASS — STRUCTURAL FORM IDENTIFIED; COEFFICIENT CALIBRATION REQUIRED**
+
+## E0 preflight
+
+- Authoritative working directory: `/Users/wwiras/Documents/src/AHBN_GKEProj/ahbn2_gke`
+- Starting commit: `304add5d72e417beff2c3f226781a57746ad7f6d`
+- Starting `git status --short`: clean
+- Interpreter version: `Python 3.14.6`
+- Interpreter executable: `/Users/wwiras/Documents/src/AHBN_GKEProj/venv_ahbn2/bin/python`
+- Stage B, C, and D output directories and `docs/K5controller-causality.md`: present
+
+The selected minimum structural correction is zero-reference pressure semantics with overload direction corrected: `z=-a_d d+a_l l+a_u u+a_c c`, positive magnitudes, and no evidence-based intercept. The equal-one instance is a diagnostic baseline, not frozen production calibration. No production controller or experiment YAML was changed; K5 and GKE were not run.
+
+## Offline evidence
+
+The exact 322 Stage B rows were evaluated for E-A and E-B. For E-B, the 72 original Cluster+2 rows produce 0 Cluster+2, 6 Cluster+3, 66 Gossip+3, and 0 Gossip+4, with weights [0.373674342691, 0.692862728262]. This distribution is descriptive, not the acceptance criterion. The paired overload test passes 72/72: every original `u` raises score and weight relative to the identical `u=0` state. Mode movements are {'Cluster->Cluster': 6, 'Cluster->Gossip': 66} and fanout deltas are {0: 72}.
+
+For `a_d=a_l=a_c=1`, each overload row requires `a_u >= (d-l-c)/u` (clipped at zero when the right side is negative). Bounds: minimum 0.186462888886, median 0.664096607433, maximum 2.721619261820. Equal diagnostic `a_u=1` satisfies 66/72. The six misses are early-EWMA states where active overload has not accumulated enough `u_hat` to overcome active duplicate pressure. Equality therefore does not guarantee `z>=0` everywhere and remains scientifically uncalibrated.
+
+All 88 monotonic sweep steps pass for E-B across zero and representative mixed backgrounds. Synthetic tests preserve the intended directions. Duplicate-only pressure selects Cluster, so the correction retains redundancy control and does not structurally collapse to always-Gossip. Churn and latency independently raise orientation; overload does not require high latency.
+
+## Direct answers
+
+1. **Q1:** I1–I7 in `stageE_design_invariants.md`: correct monotonic directions, zero-as-no-contribution, visible overload, and bounded/simple/local deterministic operation.
+2. **Q2:** No. Reversing `w_u` alone leaves false opposite evidence caused by 0.5 references.
+3. **Q3:** Yes, for these unipolar pressures the common 0.5 references must be removed or equivalently reinterpreted as zero-reference contributions.
+4. **Q4:** Zero pressure means zero contribution.
+5. **Q5:** No evidenced intercept is required. `b=0` is score-neutral; default mode intent is not explicit, and the inherited threshold tie selects Gossip.
+6. **Q6:** Yes. Signs `(-,+,+,+)` preserve duplicate, latency, overload, and churn directionality.
+7. **Q7:** With the other diagnostic magnitudes one, required `a_u` ranges from 0.186462888886 to 2.721619261820, median 0.664096607433; row-level bounds are in the CSV.
+8. **Q8:** No for universal `z>=0`: `a_u=1` satisfies 66/72 constraints and misses six, with maximum required bound 2.721619261820. It does pass monotonic overload response in all 72 pairs.
+9. **Q9:** If policy requires Gossip for every state above a defined severe-overload threshold, a calibrated asymmetric constraint on `a_u` is necessary. No guard or priority branch is yet justified because neither that threshold nor universal-Gossip policy is established.
+10. **Q10:** Yes. Corrected overload raises the scalar and naturally raises or preserves both mode orientation and fanout; no contradiction demonstrates a need to decouple.
+11. **Q11:** E-B, the zero-reference signed pressure family.
+12. **Q12:** Yes; all required synthetic cases have semantically consistent contributions and decisions.
+13. **Q13:** Yes; all intended monotonic checks pass.
+14. **Q14:** Yes; overload strictly raises score/weight for all 72 paired states because `u>0` and `a_u>0`.
+15. **Q15:** Yes structurally and in the duplicate-only test; the full-state counts are reported in `stageE_candidate_summary.csv`.
+16. **Q16:** Yes; no-disturbance, single-pressure, and mixed cases retain interpretable behavior independent of Exp08.
+17. **Q17:** Structural signs/reference are justified; magnitudes are not scientifically frozen and require later controlled calibration/sensitivity analysis.
+18. **Q18:** The formulation is ready for the next calibration stage, but not for production implementation until magnitudes are frozen.
+
+## Gate
+
+All Stage E offline-analysis gates pass. E-C and E-D were explicitly evaluated as conditional escalations and were not activated because no additional structural contradiction was demonstrated. Production `app/ahbn_controller.py`, YAML, cluster state, and experiment execution remained untouched.
