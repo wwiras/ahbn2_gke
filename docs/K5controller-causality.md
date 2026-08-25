@@ -693,3 +693,31 @@ Changing the score to `-2d+l+u+c` merely to obtain fanout 2 is **NOT RECOMMENDED
 **PRE-STAGE I INCONCLUSIVE — FANOUT ACTION INTENT NOT SUFFICIENTLY DOCUMENTED**
 
 No implementation change is authorized. The minimum scientific decision required is an explicit declaration that either (a) `{3,4}` is the acceptable complete canonical repertoire within permitted bounds `[2,4]`, or (b) fanout 2 is a named Low/conservation action that valid canonical inputs must reach. If (b) is approved, a narrowly scoped Stage I actuator-mapping correction is justified and Stage H must later be rerun. Formal Kubernetes experiments should not begin while this requested decision gate remains unresolved. Detailed evidence, tables, interpretation audits, examiner defenses, and direct answers are preserved under `outputs/k5_fanout_reachability_pre_stageI/`.
+
+# Stage I-A — Formal Fanout Action-Semantics Declaration
+
+## Design-authority resolution
+
+Pre-Stage I ended **INCONCLUSIVE** because repository evidence did not establish whether fanout 2 was merely inside configured bounds or was an intended canonical action. Design authority now resolves that ambiguity explicitly: AHBN has three canonical dissemination-intensity actions—`fanout 2 = LOW`, `fanout 3 = MODERATE`, and `fanout 4 = HIGH`—and all three must be reachable from valid canonical controller states.
+
+LOW is conservative forwarding intensity: sufficiently strong duplicate/redundancy dominance should be able to select fanout 2 for intentional conservation and redundancy suppression. It is not failure or degraded operation. MODERATE is balanced/default intensity: neutral, weak, balanced, or mixed evidence should conceptually correspond to fanout 3 when neither conservation nor robustness pressure dominates strongly; default fanout remains 3. HIGH is aggressive robustness/path-diversity intensity: sufficiently strong latency, utilization/bottleneck, or churn pressure should be able to select fanout 4. HIGH is the maximum canonical action inside `[2,4]`, not a claim that Gossip is universally optimal.
+
+The intended repertoire is `{2,3,4}`, while Pre-Stage I proved current canonical reachability `{3,4}` from `z in [-1,3]` and `w in [sigmoid(-1),sigmoid(3)]`. This mismatch is formally a **FANOUT ACTUATOR REACHABILITY INCONSISTENCY**, not a score, coefficient, observation, or mode-rule defect.
+
+## Frozen upstream semantics and separate outputs
+
+The validated upstream controller remains frozen: `z=-d+l+u+c`; contributions `Cd=-d`, `Cl=+l`, `Cu=+u`, `Cc=+c`; references `(0,0,0,0)`; coefficients `(-1,+1,+1,+1)`; intercept 0; global scale 1; `w=sigmoid(z)` with kappa 1; and Gossip iff `w>=0.5`. Alpha remains 0.30 and all observation/EWMA semantics remain unchanged. Changing the score to `-2d+l+u+c` solely for reachability is scientifically rejected because it would alter relative weighting, the Stage F/F2 freeze, duplicate-versus-positive-pressure crossovers, mode decisions, and the weight distribution to repair a downstream actuator issue.
+
+Mode (`Cluster`/`Gossip`) and fanout intensity (`LOW`/`MODERATE`/`HIGH`) are separate semantic outputs derived from the same weight. The design does not require every Cluster state to be LOW, every Gossip state to be HIGH, every overload state to be HIGH, or every duplicate state to be LOW. It requires sufficiently strong conservation orientation to reach LOW, balanced orientation to reach MODERATE, sufficiently strong robustness orientation to reach HIGH, and monotonic movement between them. The zero-pressure state gives `z=0`, `w=0.5`, the natural semantic center; Stage I-A deliberately defines no MODERATE interval or transition threshold.
+
+## Future actuator invariants and provenance
+
+A future Stage I-B/I-C mapping must make all three actions reachable within valid canonical inputs; be monotone (`w1<w2` implies `fanout(w1)<=fanout(w2)`), bounded `[2,4]`, deterministic, simple, and explainable; and preserve score, sigmoid, mode rule, coefficients, references, observations, and EWMA. Thresholds must be policy-derived, never selected from delivery, latency, duplicates, or Exp08/10/11/12 outcomes. Increasing duplicates must never increase fanout, while increasing latency, bottleneck/utilization, or churn must never decrease it, all else fixed.
+
+`wwiras/ahbn2-peer:v4` is the historical canonical image before actuator correction. It was not changed, rebuilt, overwritten, or retagged. Any future actuator-corrected image must use a new immutable tag such as `wwiras/ahbn2-peer:v5`; no such image was created here.
+
+Stage I-A made zero production-code, YAML-semantic, test-semantic, Docker-image, and GKE changes. It selected no fanout threshold or equation and used no performance metric. Required declaration artifacts are under `outputs/k5_fanout_stageIA_design/`.
+
+**STAGE I-A PASS — LOW/MODERATE/HIGH FANOUT ACTION SEMANTICS FORMALLY DECLARED**
+
+Stage I-B is authorized to derive a scientifically principled mapping from the reachable canonical weight domain to LOW/MODERATE/HIGH without using benchmark performance and without modifying the frozen score.
