@@ -631,3 +631,33 @@ Runtime score, weight, utilization direction, churn zero-reference semantics, mo
 **STAGE G PASS — MINIMAL SCIENTIFIC CONTROLLER CORRECTION IMPLEMENTED AND VERIFIED IN GKE**
 
 The canonical corrected AHBN controller is frozen and ready for separately authorized formal post-correction evaluation.
+
+# Stage H — Canonical Controller Regression Suite
+
+## Purpose and preflight
+
+Stage H is the permanent deterministic semantic regression suite for the controller frozen by Stage G. Stage G implemented the correction and verified it at runtime; Stage H encodes its response surface as unit tests. Preflight ran in the authoritative repository at starting HEAD `f04fc00f93e0fd8b2b0e4449998f129db8bf8bd5` with a clean working tree, Python 3.14.6 at the mandated executable, and the Stage G documentation and artifacts present.
+
+The production controller and `experiments/k5_exp08_ahbn.yaml` were verified before testing. Both retain zero references, coefficients `(-1,+1,+1,+1)`, alpha `0.30`, kappa `1`, beta `1`, threshold `0.50`, fanout bounds `[2,4]`, and default fanout `3`. No production controller or parameter changed.
+
+## Canonical semantics and scenarios
+
+The tested equation is `z=-d_hat+l_hat+u_hat+c_hat`, followed by `weight=sigmoid(z)`. Zero means absence of pressure, so `(0,0,0,0)` is the true neutral input and produces `z=0`, weight `0.5`, Gossip through the inherited threshold tie, and fanout 3. `(0.5,0.5,0.5,0.5)` is moderate equal pressure, not neutral; it produces `z=1`.
+
+The permanent suite covers neutral, four single-pressure cases, mixed duplicate/latency/utilization pressure, severe bottleneck and duplicate pressure, two exact cancellations, equal pressures, all 16 unit-cube corners, existing input clipping, and alpha. The Stage F crossover anchors are permanent regressions: `d=.70,u=.45` gives `z=-.25` and Cluster, while `d=.70,u=.80` gives `z=+.10` and Gossip.
+
+Single-signal sweeps at 0.1 increments prove that duplicates strictly lower score/weight and never increase fanout, while latency, utilization, and churn strictly raise score/weight and never decrease fanout. Four utilization backgrounds likewise strictly increase score and weight, never decrease fanout, and never regress Gossip to Cluster. The 75-row pairwise matrix resolves at the equal-weight crossover; four three-/four-signal cases reconstruct exact additive composition. Multiple below/at/above-zero constructions confirm the mode boundary.
+
+## Fanout boundary and formula reconstruction
+
+Python ties-to-even rounding makes the effective mapping: fanout 2 for weight at or below `0.25`; fanout 3 above `0.25` and below `0.75`; fanout 4 at or above `0.75`. All just-below/at/above boundary cases pass through production mapping. Within canonical hats `[0,1]`, the minimum score is `-1` and minimum weight is `sigmoid(-1)=0.2689414213699951`, so fanout 2 is mathematically unreachable in the canonical cube even though the mapping region exists and is verified. This is a reachability fact, not a controller change.
+
+Across 202 independently reconstructed scenario, sweep, interaction, boundary, and corner rows, the maximum score error is `2.220446049250313e-16` and maximum weight error is `1.1102230246251565e-16`; mode and fanout have zero mismatches at tolerance `1e-12`.
+
+## Test suite, image provenance, and gate
+
+The Stage G baseline was 93 tests. Stage H adds 14 permanent tests in `tests/test_stage_h_canonical_controller.py`; the complete suite passes 107/107 with zero failures. `wwiras/ahbn2-peer:v4` is locally present with image ID `sha256:adb05bdfeb341038867a4171f31d90e8b320f47b6abd168981aba1e95e5b6679` and digest `sha256:6ef9bb70c95ba8e755df31a9c5e52e00544965b6e2609e5fa76a5e11b13c7c36`, identical to the Stage G image digest.
+
+No tuning, performance fitting, baseline comparison, or GKE experiment occurred. Performance results and Stage G runtime counts were not acceptance criteria. Stage H establishes only that the frozen controller consistently implements the canonical directional policy.
+
+**STAGE H PASS — CANONICAL CONTROLLER REGRESSION SUITE VALIDATED**
