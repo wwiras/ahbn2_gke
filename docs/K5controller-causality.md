@@ -596,3 +596,38 @@ The canonical F2 freeze is `a_d=a_l=a_u=a_c=1`, `b=0`, global scale `1`, giving 
 Exact supporting artifacts are under `outputs/k5_controller_calibration_stageF2/`. Stage G implementation is scientifically ready but was not performed.
 
 **STAGE F2 PASS — CANONICAL EQUAL-WEIGHT CALIBRATION FROZEN BY PARSIMONY**
+# Stage G — Minimal Scientifically Justified Controller Correction
+
+Stage G began from clean commit `f766d00eb6f36be91ab73812735cc576a07b874e`. The authoritative Stage E, F, and F2 conclusions were read before production editing. F2 freezes the equal-one calibration by parsimony, not empirical optimization.
+
+The old production equation was `z=-(d_hat-0.5)+(l_hat-0.5)-(u_hat-0.5)+(c_hat-0.5)`. Because all four observations are unipolar pressures, absence of pressure must contribute zero rather than opposite evidence. The corrected equation is `z=-d_hat+l_hat+u_hat+c_hat`: duplicate pressure points toward Cluster, while latency, utilization, and churn pressures point toward Gossip. Utilization's sign therefore changes from negative to positive. Coefficient magnitudes remain equal to one because no independent evidence supports asymmetry; the intercept remains zero and global scale remains one. This is a semantic correction, not performance optimization.
+
+Changed implementation/configuration files are `app/ahbn_controller.py` and `experiments/k5_exp08_ahbn.yaml`. The only test expectation changes are in `tests/test_k1.py` and `tests/test_k2.py`, where obsolete pre-G equation/ControlSim comparisons were replaced by direct assertions of the frozen Stage G equation. The additive score architecture, observation and EWMA pipeline, sigmoid, mode rule, and fanout mapping remain intact.
+
+All seven deterministic anchors pass: zero pressure gives `z=0`, weight `0.5`; duplicate-only gives `z=-1`; latency-, utilization-, and churn-only each give `z=+1`; `(d,u)=(0.70,0.45)` gives `z=-0.25`; and `(d,u)=(0.70,0.80)` gives `z=+0.10`. Across four representative backgrounds and `u=0.0..1.0`, score and weight strictly increase and fanout never decreases. Independent direction checks confirm increasing d lowers score and increasing l/u/c raises it.
+
+All 322 untouched Stage B states reconstruct to `z=-d_hat+l_hat+u_hat+c_hat` and `weight=sigmoid(z)` within floating-point tolerance, with unchanged mode/fanout rules. Descriptively, 132 reconstruct as Cluster/fanout-3 and 190 as Gossip/fanout-3; score min/mean/max is `-0.894072335338/-0.0748051356591/0.983671493326`, and weight min/mean/max is `0.290270155821/0.482241347218/0.727836113112`. Of the original 72 Cluster+fanout-2 overload states, 66 reconstruct as Gossip/fanout-3 and 6 as Cluster/fanout-3. These counts are verification only and were not acceptance targets.
+
+All 93 repository unit/regression tests pass. Frozen values remain alpha `0.30`, kappa `1`, beta `1`, mode threshold `0.50`, fanout bounds `[2,4]`, and default fanout `3`. No observation generation, baseline algorithm, DC-SoC behavior, experiment topology, workload, overload semantics, coefficient tuning, threshold tuning, performance-fitting branch, or max-fanout increase occurred.
+
+The smallest established K5 smoke could not run because this environment has no configured Kubernetes current context; `kubectl` fell back to unavailable `localhost:8080`. Consequently no corrected runtime trace exists and runtime equality (`Cu=+u_hat`, `Cc=+c_hat`) is not claimed. Offline implementation and regression gates pass, but the full Stage G acceptance gate remains blocked solely on K5 smoke/runtime verification.
+
+**Stage G verdict: IMPLEMENTATION/OFFLINE VERIFICATION PASS — FULL ACCEPTANCE BLOCKED AT K5 RUNTIME SMOKE.**
+
+## Stage G runtime closure
+
+The previous Stage G block was solely the absence of a Kubernetes context. On 2026-08-25 the active context was `gke_stoked-cosine-415611_us-central1-a_bcgossip-cluster`; `bcgossip-cluster` was RUNNING in `us-central1-a` on GKE `1.35.6-gke.1641000`, and all seven nodes were Ready. The local regression gate remained 93/93 PASS and `git diff --check` passed.
+
+The corrected `app/` source was built by Cloud Build as `gcr.io/stoked-cosine-415611/ahbn2-peer:stageg-20260825` (digest `sha256:6ef9bb70c95ba8e755df31a9c5e52e00544965b6e2609e5fa76a5e11b13c7c36`). Every deployed peer used that digest. Direct inspection inside `peer-0` confirmed references `(0,0,0,0)`, coefficients `(-1,+1,+1,+1)`, alpha `0.3`, kappa `1`, beta `1`, threshold `0.5`, and min/max/default fanout `2/4/3`.
+
+The smallest existing per-run K5 path was selected rather than the comparator matrix: `scripts/run_experiment.sh` with `experiments/k5_exp08_ahbn.yaml`, seed 42, factor 1.0, run ID `k5_ahbn_seed42_factor1.0`. The exact command is preserved in `outputs/k5_controller_correction_stageG/stageG_runtime_smoke_command.txt`. The isolated `ahbn-stageg` deployment reached 20/20 Ready peers, completed its controller job normally, and collected a new trace at `/Users/wwiras/Documents/src/AHBN_GKEProj/ahbn2_gke/outputs/k5_stageg_runtime-20260825_1024/runs/k5_ahbn_seed42_factor1.0/logs.jsonl`.
+
+The trace contained 1,886 physical lines, 1,886 parsed JSON objects, and 529 controller rows. For every controller row, independent reconstruction found exact contribution errors of zero, maximum score error `2.220446049250313e-16`, maximum weight error `1.1102230246251565e-16`, and zero mismatches at tolerance `1e-12`. Runtime `Cu=+u_hat` was CONFIRMED on all 41 positive-utilization/active-overload rows. Runtime `Cc=+c_hat`, including approximately zero rather than `-0.5` on all 140 approximately-zero-churn rows, was CONFIRMED.
+
+Logged mode and fanout reconstruction was CONFIRMED with zero mismatches. Counts were Cluster/fanout-3: 348, Gossip/fanout-3: 177, and Gossip/fanout-4: 4. Trace-adjacency transitions were 28 mode and 2 fanout, while actual per-peer transitions were 19 mode and 1 fanout, matching the logged transition flags. Harness metrics—delivery `0.745`, propagation delay `0.6468360066 s`, duplicates `231`, forwards `255`—are descriptive only and were not used for acceptance or tuning.
+
+Runtime score, weight, utilization direction, churn zero-reference semantics, mode mapping, fanout mapping, and parameter freeze are now CONFIRMED. No baseline, observation, topology-generation, workload, overload, failure, churn, or heterogeneity code changed; no tuning, max-fanout increase, or experiment-specific controller logic was introduced.
+
+**STAGE G PASS — MINIMAL SCIENTIFIC CONTROLLER CORRECTION IMPLEMENTED AND VERIFIED IN GKE**
+
+The canonical corrected AHBN controller is frozen and ready for separately authorized formal post-correction evaluation.

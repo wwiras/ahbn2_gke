@@ -14,13 +14,13 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class AHBNParams:
     alpha: float = 0.3
-    d0: float = 0.5
-    l0: float = 0.5
-    u0: float = 0.5
-    c0: float = 0.5
+    d0: float = 0.0
+    l0: float = 0.0
+    u0: float = 0.0
+    c0: float = 0.0
     w_d: float = -1.0
     w_l: float = 1.0
-    w_u: float = -1.0
+    w_u: float = 1.0
     w_c: float = 1.0
     kappa: float = 1.0
     beta: float = 1.0

@@ -29,31 +29,17 @@ from observations import KubernetesObservationAdapter
 from ahbn.strategies.ahbn import AHBNStrategy
 
 
-def load_reference_control():
-    path = REFERENCE / "ahbn" / "control.py"
-    spec = importlib.util.spec_from_file_location("k2_frozen_control", path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-REF = load_reference_control()
-
-
 def assert_trajectory(test, sequence):
-    ref_ctl = REF.AHBNController(REF.AHBNParams())
-    ref_state = REF.NodeControlState()
     ctl, state = CanonicalAHBNController(), AHBNState()
     results = []
     for vector in sequence:
         got = ctl.update(state, *vector)
-        ref_ctl.update_metrics(ref_state, *vector)
-        ref_ctl.decide_mode_and_fanout(ref_state)
-        for name in ("d_hat", "l_hat", "u_hat", "c_hat", "score", "weight"):
-            test.assertAlmostEqual(getattr(got, name), getattr(ref_state, name), places=14)
-        test.assertEqual((got.mode, got.fanout), (ref_state.mode, ref_state.fanout))
+        expected_score = -got.d_hat + got.l_hat + got.u_hat + got.c_hat
+        expected_weight = 1 / (1 + math.exp(-expected_score))
+        test.assertAlmostEqual(got.score, expected_score, places=14)
+        test.assertAlmostEqual(got.weight, expected_weight, places=14)
+        test.assertEqual(got.mode, "gossip" if expected_weight >= .5 else "cluster")
+        test.assertEqual(got.fanout, round(2 + 2 * expected_weight))
         results.append(tuple(getattr(got, name) for name in (
             "d_hat", "l_hat", "u_hat", "c_hat", "score", "weight", "mode", "fanout"
         )))
@@ -132,18 +118,18 @@ class ControllerParityTests(unittest.TestCase):
 
     def test_k2_c06_c07_threshold_and_transitions(self):
         ctl = CanonicalAHBNController()
-        neutral = ctl.update(AHBNState(), .5, .5, .5, .5)
+        neutral = ctl.update(AHBNState(), 0, 0, 0, 0)
         self.assertAlmostEqual(neutral.weight, .5)
         self.assertEqual(neutral.mode, "gossip")
-        low = ctl.update(AHBNState(), 1, 0, 1, 0)
+        low = ctl.update(AHBNState(), 1, 0, 0, 0)
         high = ctl.update(AHBNState(), 0, 1, 0, 1)
         self.assertLess(low.weight, .5)
         self.assertEqual(low.mode, "cluster")
         self.assertGreater(high.weight, .5)
         self.assertEqual(high.mode, "gossip")
         state = AHBNState()
-        a = ctl.update(state, 1, 0, 1, 0)
-        b = ctl.update(state, 0, 1, 0, 1)
+        a = ctl.update(state, 1, 0, 0, 0)
+        b = ctl.update(state, 0, 1, 1, 1)
         self.assertTrue(a.mode_changed)
         self.assertTrue(b.mode_changed)
 

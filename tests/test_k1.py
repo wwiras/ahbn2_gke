@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import importlib.util
 import math
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -19,9 +17,9 @@ class ControllerTests(unittest.TestCase):
         p = AHBNParams()
         self.assertEqual(
             (p.alpha, p.d0, p.l0, p.u0, p.c0),
-            (0.3, 0.5, 0.5, 0.5, 0.5),
+            (0.3, 0.0, 0.0, 0.0, 0.0),
         )
-        self.assertEqual((p.w_d, p.w_l, p.w_u, p.w_c), (-1, 1, -1, 1))
+        self.assertEqual((p.w_d, p.w_l, p.w_u, p.w_c), (-1, 1, 1, 1))
         self.assertEqual(
             (p.kappa, p.beta, p.min_fanout, p.max_fanout, p.default_fanout),
             (1, 1, 2, 4, 3),
@@ -33,7 +31,7 @@ class ControllerTests(unittest.TestCase):
         first = ctl.update(state, -4, 2, 1, 0)
         self.assertEqual((first.raw_d, first.raw_l, first.raw_u, first.raw_c), (0, 1, 1, 0))
         self.assertEqual((state.d_hat, state.l_hat, state.u_hat, state.c_hat), (0, .3, .3, 0))
-        expected_score = -(0-.5) + (.3-.5) - (.3-.5) + (0-.5)
+        expected_score = -0 + .3 + .3 + 0
         self.assertAlmostEqual(state.score, expected_score)
         self.assertAlmostEqual(state.weight, 1 / (1 + math.exp(-expected_score)))
         self.assertEqual(state.mode, "gossip" if state.weight >= .5 else "cluster")
@@ -45,18 +43,7 @@ class ControllerTests(unittest.TestCase):
             second.d_hat, second.l_hat, second.u_hat, second.c_hat, second.weight
         )))
 
-    def test_reference_vectors_match_frozen_controlsim(self):
-        reference_path = Path(os.environ.get(
-            "AHBN_CONTROLSIM_CONTROL",
-            "/Users/wwiras/Documents/src/AHBNProj/ahbn/v0.61/ahbn/control.py",
-        ))
-        spec = importlib.util.spec_from_file_location("frozen_control", reference_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec.loader is not None
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        ref_ctl = module.AHBNController(module.AHBNParams())
-        ref_state = module.NodeControlState()
+    def test_stage_g_canonical_semantics(self):
         ctl, state = CanonicalAHBNController(), AHBNState()
         vectors = [
             (.5, .5, .5, .5), (1, .2, .2, .1), (.1, 1, .2, .1),
@@ -65,12 +52,29 @@ class ControllerTests(unittest.TestCase):
         ]
         for vector in vectors:
             got = ctl.update(state, *vector)
-            ref_ctl.update_metrics(ref_state, *vector)
-            ref_ctl.decide_mode_and_fanout(ref_state)
-            self.assertEqual(got.mode, ref_state.mode)
-            self.assertEqual(got.fanout, ref_state.fanout)
-            for name in ("d_hat", "l_hat", "u_hat", "c_hat", "score", "weight"):
-                self.assertAlmostEqual(getattr(got, name), getattr(ref_state, name), places=14)
+            expected_score = -got.d_hat + got.l_hat + got.u_hat + got.c_hat
+            self.assertAlmostEqual(got.score, expected_score, places=14)
+            self.assertAlmostEqual(got.weight, 1 / (1 + math.exp(-expected_score)), places=14)
+            self.assertEqual(got.mode, "gossip" if got.weight >= .5 else "cluster")
+            self.assertEqual(got.fanout, round(2 + 2 * got.weight))
+
+    def test_stage_g_pressure_directions(self):
+        ctl = CanonicalAHBNController()
+        cases = [
+            ((0, 0, 0, 0), 0.0, "gossip"),
+            ((1, 0, 0, 0), -1.0, "cluster"),
+            ((0, 1, 0, 0), 1.0, "gossip"),
+            ((0, 0, 1, 0), 1.0, "gossip"),
+            ((0, 0, 0, 1), 1.0, "gossip"),
+            ((.7, 0, .45, 0), -.25, "cluster"),
+            ((.7, 0, .8, 0), .1, "gossip"),
+        ]
+        for vector, expected_score, expected_mode in cases:
+            state = AHBNState(*vector)
+            decision = ctl.update(state, *vector)
+            # alpha-weight the same value into an already-equal EWMA state.
+            self.assertAlmostEqual(decision.score, expected_score)
+            self.assertEqual(decision.mode, expected_mode)
 
 
 class ObservationTests(unittest.TestCase):

@@ -8,5 +8,5 @@ topology: {type: ba, baM: 2, seed: 42}
 failure: {mode: bottleneck, triggerTime: 0.5, overloadDelayMs: 700}
 workload: {messageCount: 20, messageInterval: 0.4}
 bottleneck: {enabled: true, target: important_peer, delayMs: 700}
-ahbn: {alpha: 0.30, d0: 0.50, l0: 0.50, u0: 0.50, c0: 0.50, w_d: -1.0, w_l: 1.0, w_u: -1.0, w_c: 1.0, kappa: 1.0, beta: 1.0, min_fanout: 2, max_fanout: 4, default_fanout: 3, mode_threshold: 0.50}
+ahbn: {alpha: 0.30, d0: 0.0, l0: 0.0, u0: 0.0, c0: 0.0, w_d: -1.0, w_l: 1.0, w_u: 1.0, w_c: 1.0, kappa: 1.0, beta: 1.0, min_fanout: 2, max_fanout: 4, default_fanout: 3, mode_threshold: 0.50}
 k5: {algorithm: ahbn, seed: 42, overload_factor: 1.0, overload_delay_ms: 700}
