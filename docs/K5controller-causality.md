@@ -789,3 +789,33 @@ Expected tracked changes are `app/ahbn_controller.py`, the three relevant regres
 The canonical AHBN controller now implements the Stage I-B LOW/MODERATE/HIGH mapping exactly: `z<=-0.25` maps to fanout 2, `-0.25<z<0.25` maps to fanout 3, and `z>=0.25` maps to fanout 4. All three canonical fanout actions are reachable while the upstream controller `z=-d+l+u+c` remains unchanged.
 
 The next authorized step is a minimal GKE runtime smoke using a newly built immutable actuator-corrected image. Formal multi-seed Kubernetes evaluation remains blocked until that smoke confirms runtime score/mode/fanout reconstruction.
+
+# Stage I-D — Runtime Verification of LOW/MODERATE/HIGH Fanout Actuator
+
+## Preflight, provenance, and smoke scope
+
+Stage I-D began at HEAD `739776a808307256cd40d20687186eb0ae664827` with a clean tree, Python 3.14.6 at the mandated executable, and the complete 108-test repository suite passing. The active context was `gke_stoked-cosine-415611_us-central1-a_bcgossip-cluster`; the expected `bcgossip-cluster` control plane was reachable and all 7/7 GKE nodes were Ready on `1.35.6-gke.1641000`. `git diff --check` passed before deployment.
+
+Independent Docker Hub inspection established that `wwiras/ahbn2-peer:v5` is a Docker v2 manifest with registry digest `sha256:22e25fbfadca8340ba6380f1190d6e41437b24bbf165056cb283faefcc9b27b6`. The reported `sha256:5604d49a3d8c9db033b6736db53bfb38e728598cf1826d5352947af1e80c6411` is the local image/config ID, not the remote manifest digest. The local platform is linux/amd64. All 20 runtime peer containers and the controller job used `docker.io/wwiras/ahbn2-peer:v5` with imageID digest `sha256:22e25fbfadca8340ba6380f1190d6e41437b24bbf165056cb283faefcc9b27b6`, exactly matching Docker Hub.
+
+Exactly one isolated AHBN-only smoke ran in namespace `ahbn-stageid`, release `ahbn`, using the existing `scripts/run_experiment.sh` and `experiments/k5_exp08_ahbn.yaml` path with seed 42, overload factor 1.0, `IMAGE=wwiras/ahbn2-peer:v5`, and Parallel pod startup. The exact command is preserved in `outputs/k5_fanout_stageID_runtime/stageID_smoke_command.txt`. No comparator, additional seed/factor, formal matrix, or cluster recreation occurred. All 20/20 peers became Ready with zero restarts, the controller job completed with exit code 0, and logs were collected under `outputs/k5_fanout_stageID_runtime/run_k5_ahbn_seed42_factor1.0/`.
+
+## Runtime reconstruction
+
+The new `logs.jsonl` contains 1,689 physical lines, 1,689 parsed JSON objects, no malformed lines, and 470 `ahbn_controller_trace` rows. Repeated `JSONDecoder.raw_decode` parsing was used so concatenated objects would be preserved if present.
+
+For every controller row, independent reconstruction used `Cd=-d_hat`, `Cl=+l_hat`, `Cu=+u_hat`, `Cc=+c_hat`, and `z=Cd+Cl+Cu+Cc`, followed by the numerically stable sigmoid, unchanged mode rule, and Stage I-C fanout rule. Maximum contribution, score, and weight errors were all zero at tolerance `1e-12`; contribution, score, weight, mode, and fanout mismatch counts were all zero.
+
+The runtime fanout distribution was LOW/2 `246`, MODERATE/3 `185`, and HIGH/4 `39`. Mode×fanout counts were Cluster+2 `246`, Cluster+3 `53`, Gossip+3 `132`, and Gossip+4 `39`, directly confirming mode/fanout separation. The nearest naturally observed lower-boundary score was `-0.253339643303559` and mapped to 2; the nearest upper-boundary score was `0.2593929437541962` and mapped to 4. No exact boundary hit was required or manufactured because equality is permanently covered offline.
+
+All 35 positive-utilization rows had `Cu=+u_hat` exactly; representative pairs were `(.30,.30)`, `(.51,.51)`, `(.657,.657)`, `(.7599,.7599)`, and `(.83193,.83193)`. No universal overload-to-Gossip or overload-to-4 outcome was imposed; the controller remains additive. Direct inspection inside the running v5 peer confirmed zero references, coefficients `(-1,+1,+1,+1)`, alpha `.30`, kappa `1`, beta `1`, threshold `.50`, min/max/default `2/4/3`, and the frozen score and actuator source.
+
+Harness metrics are **DESCRIPTIVE ONLY**: delivery ratio `0.6475`, propagation delay `0.6590865015983581 s`, duplicates `211`, and total forwards `239`. They were not compared with v4, Stage G, or baselines and did not influence acceptance or tuning.
+
+No controller, threshold, parameter, YAML, test, baseline, observation, workload, or image changed during Stage I-D. The full repository suite remained 108/108 PASS. Runtime artifacts and captured resources are under `outputs/k5_fanout_stageID_runtime/`.
+
+**STAGE I-D PASS — ACTUATOR-CORRECTED AHBN VERIFIED AT RUNTIME IN GKE**
+
+The runtime controller preserves `z=-d+l+u+c` and implements the canonical LOW/MODERATE/HIGH actuator exactly: `z<=-0.25 -> fanout 2`, `-0.25<z<0.25 -> fanout 3`, `z>=0.25 -> fanout 4`.
+
+`wwiras/ahbn2-peer:v5` is frozen as the actuator-corrected canonical Kubernetes image and is authorized for the formal multi-seed evaluation matrix.
