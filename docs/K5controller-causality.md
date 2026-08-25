@@ -661,3 +661,35 @@ The Stage G baseline was 93 tests. Stage H adds 14 permanent tests in `tests/tes
 No tuning, performance fitting, baseline comparison, or GKE experiment occurred. Performance results and Stage G runtime counts were not acceptance criteria. Stage H establishes only that the frozen controller consistently implements the canonical directional policy.
 
 **STAGE H PASS — CANONICAL CONTROLLER REGRESSION SUITE VALIDATED**
+
+# Pre-Stage I — Fanout Actuator Reachability Decision Audit
+
+## Scope and preflight
+
+Pre-Stage I began at HEAD `54a33973093239c141ff56c17efdfb2fd0b6bffb` with a clean working tree, Python 3.14.6 at `/Users/wwiras/Documents/src/AHBN_GKEProj/venv_ahbn2/bin/python`, and the required Stage G/H records and frozen Stage H test present. Stage F, F2, G, and H conclusions were read. This was a mathematical and repository-evidence audit only: no controller, YAML, test semantics, image, experiment, parameter, or performance metric was changed or run.
+
+## Mathematical reachability
+
+The frozen formula is `z=-d+l+u+c` for `d,l,u,c in [0,1]`. Termwise bounds prove `-1 <= z <= 3`; the minimum is attained at `(1,0,0,0)` and the maximum at `(0,1,1,1)`. Consequently the reachable weight interval is exactly `[sigmoid(-1),sigmoid(3)] = [0.2689414213699951,0.9525741268224334]`. Exhaustive enumeration of all 16 corners independently confirms the analytic result.
+
+For `round(clamp(2+2w,2,4))`, Python ties-to-even gives fanout 2 for `w<=0.25` (2.5 rounds to 2), fanout 3 for `0.25<w<0.75`, and fanout 4 for `w>=0.75` (3.5 rounds to 4). Intersecting these regions with the canonical interval proves that fanout 2 is unreachable, fanouts 3 and 4 are reachable, and the effective canonical set is `{3,4}`. The exact gap is `sigmoid(-1)-1/4=(3-e)/(4(1+e))`, approximately `0.0189414213699951`.
+
+Configured bounds, mapping-allowed values, reachable values, and intended actions are distinct: they are respectively `[2,4]`, `{2,3,4}` over an unconstrained unit weight, `{3,4}` under the canonical score domain, and an intended repertoire that repository evidence does not conclusively define.
+
+## Design-intent audit and interpretations
+
+`docs/exp8.md` and `docs/exp12.md` explicitly require bottleneck/resource pressure to increase aggressiveness, Gossip orientation, and fanout above the configured baseline. Stage F/H records explicitly require monotone directions: duplicate pressure lowers orientation and never increases fanout; latency, overload, and churn raise orientation and never decrease it. Configuration and source explicitly name min/default/max as 2/3/4. Stage B explicitly records historical Cluster+2 behavior, and Stage H explicitly records current mathematical unreachability.
+
+However, no reviewed statement defines `[2,4]` as safety bounds only, assigns Low/Moderate/High to 2/3/4, calls 2 the canonical conservation action, or requires every discrete value to be reachable. Relative “low-fanout Cluster” language does not uniquely identify integer 2. Stage F's explicit statement that overload adaptation need not reach fanout 4 supports—but does not prove—the general bounds-only interpretation. Historical Stage B behavior proves prior reachability, not intent.
+
+Interpretation A (bounds only) is mathematically sound and compatible with min/max/default and directional language, but lacks an explicit safety-only or `{3,4}`-complete design statement. Interpretation B (three intended levels) is compatible with the 2/3/4 configuration and historical operation, but its Low/Moderate/High premise is not stated. Neither meets the required evidence hierarchy strongly enough for Outcome A or B.
+
+The historical change is explained by the score: the old centered-reference/sign formulation could produce scores below -1 and weights below 0.25; the F2/G formula has only one negative bounded term, `-d`, so it cannot. This neither proves that the old behavior must remain nor that current unreachability is acceptable.
+
+Changing the score to `-2d+l+u+c` merely to obtain fanout 2 is **NOT RECOMMENDED**. It would alter relative coefficient semantics, the Stage F/F2 parsimony freeze, duplicate-versus-positive crossovers, mode decisions, and weight/fanout distributions. If design authority confirms that fanout 2 is required, the issue is a downstream `fanout actuator reachability inconsistency`. Any future Stage I design must preserve the frozen score, monotonicity, bounds, determinism, simplicity, explainability, and policy-derived rather than benchmark-fitted transitions. No mapping is proposed here.
+
+## Decision
+
+**PRE-STAGE I INCONCLUSIVE — FANOUT ACTION INTENT NOT SUFFICIENTLY DOCUMENTED**
+
+No implementation change is authorized. The minimum scientific decision required is an explicit declaration that either (a) `{3,4}` is the acceptable complete canonical repertoire within permitted bounds `[2,4]`, or (b) fanout 2 is a named Low/conservation action that valid canonical inputs must reach. If (b) is approved, a narrowly scoped Stage I actuator-mapping correction is justified and Stage H must later be rerun. Formal Kubernetes experiments should not begin while this requested decision gate remains unresolved. Detailed evidence, tables, interpretation audits, examiner defenses, and direct answers are preserved under `outputs/k5_fanout_reachability_pre_stageI/`.
