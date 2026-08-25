@@ -524,3 +524,57 @@ All 88 monotonic sweep steps pass for E-B across zero and representative mixed b
 ## Gate
 
 All Stage E offline-analysis gates pass. E-C and E-D were explicitly evaluated as conditional escalations and were not activated because no additional structural contradiction was demonstrated. Production `app/ahbn_controller.py`, YAML, cluster state, and experiment execution remained untouched.
+
+# Stage F — Policy-Led Coefficient Calibration
+
+## Scope and preflight
+
+Stage F used only preserved Stage B–E evidence and synthetic pressure states. It did not rerun K5, access GKE, modify controller/YAML, change alpha/kappa/beta/threshold/fanout bounds, or optimize end-to-end outcomes. Preflight ran in `/Users/wwiras/Documents/src/AHBN_GKEProj/ahbn2_gke` at starting HEAD `00440e90b1894c3b2b923ddbf5ef65e95897549c`; starting `git status --short` was clean. Python was 3.14.6 at the mandated executable. All required prior outputs, the preserved K5 trace, and this document were present.
+
+## Policy and mathematical result
+
+The established family remains `z=-a_d d+a_l l+a_u u+a_c c`, positive coefficients and `b=0`. Set `a_d=1` to remove relative-scale non-identifiability and express latency, overload, and churn as ratios to duplicate cost. Diagnostic bands are LOW `[0,.25]`, MODERATE `(.25,.50]`, HIGH `(.50,.75]`, and SEVERE `(.75,1]`; they are not runtime thresholds.
+
+The exact bottleneck invariant is: with `d,l,c` fixed, increasing `u` must strictly increase score and weight, never decrease fanout, make low-fanout Cluster no more likely, and progressively increase Gossip/alternative-path orientation. It does not require every overload state to be Gossip or fanout 4. Zero pressure is score-neutral (`z=0`, `weight=.5`), and the inherited tie-selected label is not a substantive preference. Duplicate-dominant states are Cluster-oriented; latency-, overload-, and churn-dominant states are Gossip-oriented. Latency supports but is not required for overload response, and small churn remains a small contribution.
+
+The declared conflict policy uses representative high duplicates `.70`: a moderate competitor `.45` does not win, but a severe competitor `.80` does. For any standalone competing signal `x`, this yields `.70/.80 < a_x/a_d < .70/.45`, or `0.875 < ratio < 1.555...`. The exact crossover is always `d/x`. Thus the same policy-derived admissible interval applies initially to `a_l/a_d`, `a_u/a_d`, and `a_c/a_d`. This interval is identified; a unique point within it is not.
+
+## Candidate and preserved-state evidence
+
+F-A `(1,1,1,1)`, F-B `(1,1,1.25,1)`, and F-C `(1,1,1,1.25)` satisfy all policy anchors. F-D `(1,.75,1.25,1)` is rejected because severe latency `.80` does not overcome high duplicates `.70`. No candidate becomes always-Gossip or always-Cluster across 322 states. At scale 1, no preserved weight is below `.10` or above `.90`; F-A spans `.290270–.727836`, while F-B spans `.290270–.774461`. Scale 2 changes confidence/fanout and gives F-B one weight above `.90`, demonstrating why absolute scale is a separate unresolved choice.
+
+All candidate overload comparisons pass 72/72 strict score/weight increases. Every `u=0.0…1.0` sweep across four backgrounds has nondecreasing fanout and strictly increasing score/weight. Existing mode/fanout coupling therefore remains acceptable. Local perturbations preserve sign monotonicity and duplicate-only Cluster behaviour; strict synthetic crossover anchors can change when a ratio is perturbed across their boundary, which correctly exposes that the admissible region—not any point—is robustly established.
+
+The six equal-one negative overload rows are sequences 168–173, the first six overload-EWMA states (`u_hat=.30,.51,.657,.7599,.83193,.882351`) within 0.411 seconds of activation, while duplicate EWMA is `.845616–.974053`. They are scientifically acceptable evidence accumulation, not directional policy violations: every paired state moves upward versus `u=0`, and the brief explicitly rejects universal immediate Gossip. If immediate reaction is later required, that is a new policy/observation-latency requirement rather than evidence for fitting away all six.
+
+## Direct answers
+
+1. **Q1:** The fixed-background strict score/weight increase and nondecreasing-fanout bottleneck invariant stated above.
+2. **Q2:** No; neither every `u>0` nor every preserved overload row must be Gossip.
+3. **Q3:** Score-neutral: `z=0`, `weight=.5`; the threshold tie label is not a strong policy.
+4. **Q4:** Duplicate-dominant conditions must remain Cluster-oriented.
+5. **Q5:** Latency-dominant conditions are Gossip-oriented, but latency is supportive rather than a prerequisite for overload adaptation.
+6. **Q6:** Overload-dominant conditions are Gossip-oriented and stronger overload must never move orientation backward.
+7. **Q7:** Churn-dominant conditions are Gossip-oriented; zero and small churn have zero and small positive contributions.
+8. **Q8:** Under the declared diagnostic policy, severe overload `.80` overcomes high duplicates `.70`, while moderate overload `.45` does not.
+9. **Q9:** `0.875 < a_u/a_d < 1.555...`; the lower crossover is exactly `.70/.80=.875`.
+10. **Q10:** Severe churn `.80` overcomes high duplicates `.70`; moderate churn `.45` does not.
+11. **Q11:** `0.875 < a_c/a_d < 1.555...`.
+12. **Q12:** Severe latency `.80` overcomes high duplicates `.70`; moderate latency `.45` does not.
+13. **Q13:** `0.875 < a_l/a_d < 1.555...`.
+14. **Q14:** Acceptable early evidence accumulation, not policy violations, under the stated non-immediate-switch policy.
+15. **Q15:** F-A, F-B, and F-C; F-D fails one latency-conflict anchor.
+16. **Q16:** No candidate collapses to one mode across all 322 states.
+17. **Q17:** No scale-1 candidate excessively saturates. Scale 2 begins to produce a small high-tail for F-B/F-D and materially changes fanout.
+18. **Q18:** Yes; all overload sweeps preserve nondecreasing fanout, so no decoupling evidence appears.
+19. **Q19:** The feasible ratio region and monotonic directions are robust; individual point candidates can cross deliberately strict policy boundaries under ±20%, so a unique point is not robustly identified.
+20. **Q20:** No. Multiple simple sets implement the same approved qualitative policy and preserved evidence cannot distinguish them without fitting Exp08 consequences.
+21. **Q21:** Not applicable; no coefficients are scientifically frozen. F-A is the parsimonious leading point only.
+22. **Q22:** An independently approved crossover severity and desired score/weight/fanout margin for each conflict, plus evidence establishing the desired absolute sigmoid confidence scale.
+23. **Q23:** Structurally yes, but not yet ready for coefficient implementation; the next stage must wait for the missing policy-strength evidence.
+
+## Gate and verdict
+
+All offline Stage F gates pass: repository/evidence verified; no K5/GKE/production changes; structure and zero semantics preserved; policies, inequalities, bands, crossovers, early rows, candidate matrices, 322/72-state consequences, monotonicity, saturation, scale separation, sensitivity, coupling, and ranking documented. The required coefficients-freeze alternative is satisfied by explicitly identifying the evidence gap.
+
+**STAGE F PASS — POLICY CONSTRAINTS ESTABLISHED; UNIQUE CALIBRATION NOT IDENTIFIED**
