@@ -115,9 +115,14 @@ class CanonicalAHBNController:
             self.sigmoid(p.kappa * state.score), 0.0, 1.0
         )
         state.mode = "gossip" if state.weight >= p.mode_threshold else "cluster"
-        span = p.max_fanout - p.min_fanout
-        raw_fanout = p.min_fanout + p.beta * state.weight * span
-        state.fanout = int(round(self.clamp(raw_fanout, p.min_fanout, p.max_fanout)))
+        at_low_boundary = math.isclose(state.score, -0.25, rel_tol=0.0, abs_tol=1e-12)
+        at_high_boundary = math.isclose(state.score, 0.25, rel_tol=0.0, abs_tol=1e-12)
+        if state.score < -0.25 or at_low_boundary:
+            state.fanout = p.min_fanout
+        elif state.score > 0.25 or at_high_boundary:
+            state.fanout = p.max_fanout
+        else:
+            state.fanout = p.default_fanout
 
         return AHBNDecision(
             raw_d, raw_l, raw_u, raw_c,

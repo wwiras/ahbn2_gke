@@ -29,6 +29,14 @@ from observations import KubernetesObservationAdapter
 from ahbn.strategies.ahbn import AHBNStrategy
 
 
+def expected_fanout(score: float) -> int:
+    if score < -0.25 or math.isclose(score, -0.25, rel_tol=0.0, abs_tol=1e-12):
+        return 2
+    if score > 0.25 or math.isclose(score, 0.25, rel_tol=0.0, abs_tol=1e-12):
+        return 4
+    return 3
+
+
 def assert_trajectory(test, sequence):
     ctl, state = CanonicalAHBNController(), AHBNState()
     results = []
@@ -39,7 +47,7 @@ def assert_trajectory(test, sequence):
         test.assertAlmostEqual(got.score, expected_score, places=14)
         test.assertAlmostEqual(got.weight, expected_weight, places=14)
         test.assertEqual(got.mode, "gossip" if expected_weight >= .5 else "cluster")
-        test.assertEqual(got.fanout, round(2 + 2 * expected_weight))
+        test.assertEqual(got.fanout, expected_fanout(expected_score))
         results.append(tuple(getattr(got, name) for name in (
             "d_hat", "l_hat", "u_hat", "c_hat", "score", "weight", "mode", "fanout"
         )))
@@ -134,11 +142,11 @@ class ControllerParityTests(unittest.TestCase):
         self.assertTrue(b.mode_changed)
 
     def test_k2_c08_dense_fanout_mapping(self):
-        for weight in [i / 1000 for i in range(1001)]:
-            self.assertIn(round(2 + 2 * weight), (2, 3, 4))
-        for weight, expected in ((0, 2), (.249999, 2), (.25, 2),
-                                 (.250001, 3), (.749999, 3), (.75, 4), (1, 4)):
-            self.assertEqual(round(2 + 2 * weight), expected)
+        fanouts = [expected_fanout(-1 + i / 250) for i in range(1001)]
+        self.assertEqual(set(fanouts), {2, 3, 4})
+        for score, expected in ((-1, 2), (-.250001, 2), (-.25, 2),
+                                (-.249999, 3), (.249999, 3), (.25, 4), (3, 4)):
+            self.assertEqual(expected_fanout(score), expected)
 
     def test_k2_c09_long_fixed_seed_stability(self):
         def run():
@@ -338,7 +346,7 @@ class RegressionAndTraceTests(unittest.TestCase):
         self.assertAlmostEqual(decision.score, score)
         self.assertAlmostEqual(decision.weight, weight)
         self.assertEqual(decision.mode, "gossip" if weight >= .5 else "cluster")
-        self.assertEqual(decision.fanout, round(2 + 2 * weight))
+        self.assertEqual(decision.fanout, expected_fanout(score))
         self.assertEqual(decision.mode_changed, decision.mode != previous_mode)
         self.assertEqual(decision.fanout_changed, decision.fanout != previous_fanout)
         combined = (APP / "peer.py").read_text() + json.dumps(decision.__dict__)

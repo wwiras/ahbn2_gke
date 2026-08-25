@@ -757,3 +757,35 @@ Stage I-B made zero production-controller, YAML-semantic, regression-test-semant
 **STAGE I-B PASS — PRINCIPLED FANOUT MAPPING DERIVED**
 
 Stage I-C is authorized to implement exactly the selected downstream mapping without modifying frozen upstream semantics. Any later corrected image must use a new immutable tag.
+
+# Stage I-C — Fanout Actuator Mapping Implementation
+
+## Preflight and implementation scope
+
+Stage I-C began at HEAD `c82e862f0b8f32a59b46a51c5cf04fbaa4b82bd3` with a clean working tree and Python 3.14.6 at the mandated executable. Stage I-A/I-B artifacts and the Stage H suite were present and read. The active production mapping in `app/ahbn_controller.py` was verified as `raw_fanout=min_fanout+beta*weight*(max_fanout-min_fanout)`, followed by clamp and Python rounding. No duplicate production implementation was found; obsolete rounding expectations existed in `tests/test_k1.py`, `tests/test_k2.py`, and `tests/test_stage_h_canonical_controller.py`.
+
+The downstream decision now selects `min_fanout` when `score<=-.25`, `max_fanout` when `score>=.25`, and `default_fanout` otherwise. With frozen parameters this is exactly LOW/2, MODERATE/3, and HIGH/4. Equality uses the established absolute numerical tolerance `1e-12`: this is necessary because the mandated decimal anchor `.45-.70` is represented as `-0.24999999999999994`. Meaningful neighboring probes at `±1e-9` remain in the adjacent regions, confirming the intended boundary inclusions.
+
+No score, contribution, weight, sigmoid, mode statement, observation, EWMA, coefficient, reference, alpha, kappa, bound, default, baseline, DC-SoC, workload, or experiment definition changed. Tests were updated only where the Stage I-B actuator intentionally superseded old rounding semantics; Stage H's score, weight, directionality, algebra, mode-boundary, clipping, and alpha coverage remains intact.
+
+## Offline verification
+
+Production-path boundary checks pass just below, at, and just above both `-.25` and `+.25`, plus zero. Canonical anchors pass: `z=-1/0/+1` select fanout `2/3/4`. The Stage F conflict anchors pass: `d=.70,u=.45` is Cluster+2 at the inclusive lower boundary, while `d=.70,u=.80` is Gossip+3 at `z=.10`. Direct cases confirm all required combinations: Cluster+2, Cluster+3, Gossip+3, and Gossip+4. Thus mode remains forwarding orientation while fanout remains intensity rather than collapsing into a binary coupling.
+
+Controlled 101-point sweeps for each signal pass: increasing duplicates strictly lowers score/weight and never increases fanout; increasing latency, utilization, or churn strictly raises score/weight and never decreases fanout. Valid canonical inputs now demonstrate effective action set `{2,3,4}`. Independent reconstruction over 14,641 canonical grid states found maximum score and weight errors zero and mismatch counts `score=0`, `weight=0`, `mode=0`, `fanout=0` at tolerance `1e-12`.
+
+The first focused run exposed only the decimal-boundary representation described above (45/46 pass); after numerically stable equality handling the focused suites pass 46/46. The complete repository suite now passes 108/108 with zero failures, one more than Stage H because permanent mode/fanout separation and reachability coverage was added.
+
+## Parameter, image, and diff audit
+
+`beta=1` remains frozen in parameters, YAML provenance, and compatibility tests but is no longer read by canonical fanout. It is classified **B: retained for compatibility/provenance but no longer used for canonical fanout**; no unrelated cleanup occurred. Min/max/default remain operationally used.
+
+`wwiras/ahbn2-peer:v4` remains the historical pre-actuator-correction Stage G/H image and was not changed, rebuilt, overwritten, or retagged. No Docker or GKE action and no benchmark/performance comparison occurred. A later minimal runtime smoke must build a new immutable tag such as `wwiras/ahbn2-peer:v5`; formal multi-seed evaluation remains blocked until that smoke reconstructs score, mode, and fanout.
+
+Expected tracked changes are `app/ahbn_controller.py`, the three relevant regression files, and this documentation. There were no pre-existing or unexpected tracked changes and no YAML changes. Detailed artifacts are under `outputs/k5_fanout_stageIC_implementation/`.
+
+**STAGE I-C PASS — PRINCIPLED FANOUT ACTUATOR MAPPING IMPLEMENTED AND OFFLINE-VERIFIED**
+
+The canonical AHBN controller now implements the Stage I-B LOW/MODERATE/HIGH mapping exactly: `z<=-0.25` maps to fanout 2, `-0.25<z<0.25` maps to fanout 3, and `z>=0.25` maps to fanout 4. All three canonical fanout actions are reachable while the upstream controller `z=-d+l+u+c` remains unchanged.
+
+The next authorized step is a minimal GKE runtime smoke using a newly built immutable actuator-corrected image. Formal multi-seed Kubernetes evaluation remains blocked until that smoke confirms runtime score/mode/fanout reconstruction.

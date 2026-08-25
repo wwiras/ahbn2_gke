@@ -12,6 +12,14 @@ from ahbn_controller import AHBNParams, AHBNState, CanonicalAHBNController
 from observations import KubernetesObservationAdapter
 
 
+def expected_fanout(score: float) -> int:
+    if score < -0.25 or math.isclose(score, -0.25, rel_tol=0.0, abs_tol=1e-12):
+        return 2
+    if score > 0.25 or math.isclose(score, 0.25, rel_tol=0.0, abs_tol=1e-12):
+        return 4
+    return 3
+
+
 class ControllerTests(unittest.TestCase):
     def test_frozen_parameters_and_signs(self):
         p = AHBNParams()
@@ -56,7 +64,7 @@ class ControllerTests(unittest.TestCase):
             self.assertAlmostEqual(got.score, expected_score, places=14)
             self.assertAlmostEqual(got.weight, 1 / (1 + math.exp(-expected_score)), places=14)
             self.assertEqual(got.mode, "gossip" if got.weight >= .5 else "cluster")
-            self.assertEqual(got.fanout, round(2 + 2 * got.weight))
+            self.assertEqual(got.fanout, expected_fanout(got.score))
 
     def test_stage_g_pressure_directions(self):
         ctl = CanonicalAHBNController()
