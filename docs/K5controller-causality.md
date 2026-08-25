@@ -578,3 +578,21 @@ The six equal-one negative overload rows are sequences 168–173, the first six 
 All offline Stage F gates pass: repository/evidence verified; no K5/GKE/production changes; structure and zero semantics preserved; policies, inequalities, bands, crossovers, early rows, candidate matrices, 322/72-state consequences, monotonicity, saturation, scale separation, sensitivity, coupling, and ranking documented. The required coefficients-freeze alternative is satisfied by explicitly identifying the evidence gap.
 
 **STAGE F PASS — POLICY CONSTRAINTS ESTABLISHED; UNIQUE CALIBRATION NOT IDENTIFIED**
+
+# Stage F2 — Calibration Decision Gate
+
+Stage F2 used the authoritative repository at initial HEAD `e3ea9be834aba76912b6d559985e3546f2662478` with a clean initial status and Python 3.14.6 from the mandated environment. All Stage B–F and preserved K5 evidence existed. It did not rerun K5, access GKE, change controller/YAML, or optimize an end-to-end outcome.
+
+The asymmetry search found explicit directional requirements—overload must increase Gossip/path-diversity orientation, churn must cause adaptive reaction, and duplicate-dominant conditions remain Cluster-oriented—but no independent claim or cost model establishes that latency, overload, or churn deserves a larger coefficient magnitude. In particular, nothing distinguishes F-B's `a_u=1.25` or F-C's `a_c=1.25` from `1.10` or `1.40`. All hats share the bounded numeric domain `[0,1]`, but they do not share physical units or information content; equal coefficients are therefore not an empirical claim of equal real-world costs.
+
+F-A/F-B/F-C satisfy every declared Stage F anchor with the same required qualitative outcome. All retain overload monotonicity, duplicate-only Cluster behaviour, single-pressure Gossip behaviour, and no scale-1 saturation. Local perturbations expose the established interval boundaries similarly; no candidate has a clear non-performance robustness advantage. Across the preserved 322 states, F-A/F-B differ in only 3 modes and 1 fanout, F-A/F-C in 2 modes and 0 fanouts, and F-B/F-C in 5 modes and 1 fanout. These descriptive differences are not selection criteria.
+
+The formal convention is: among policy-valid coefficient sets, minimize `J=(a_l-1)^2+(a_u-1)^2+(a_c-1)^2` unless independent evidence justifies asymmetry. On the Stage F box, the unique minimizer is F-A `(1,1,1,1)`. This is a minimum-assumption symmetry/parsimony rule, not performance fitting or statistical maximum entropy. Equal-one is conventionally selected, not uniquely estimated.
+
+Global scale is likewise unidentified and mathematically confounded with `kappa` as sigmoid gain. No evidence requires a non-unit scale; scale 1 adds no gain parameter, preserves useful dynamic range, and avoids the stronger saturation/fanout effects seen at scale 2. Therefore scale 1 is frozen by parsimony while `kappa=1` remains unchanged.
+
+The canonical F2 freeze is `a_d=a_l=a_u=a_c=1`, `b=0`, global scale `1`, giving `z=-d+l+u+c`. Alpha, observations, normalization, sigmoid, kappa, threshold/rule, beta, fanout mapping, and fanout bounds remain unchanged. Further coefficient work would be informative only with an independent cost model, crossover severity, or confidence-margin requirement; otherwise it would merely benchmark-fit the controller.
+
+Exact supporting artifacts are under `outputs/k5_controller_calibration_stageF2/`. Stage G implementation is scientifically ready but was not performed.
+
+**STAGE F2 PASS — CANONICAL EQUAL-WEIGHT CALIBRATION FROZEN BY PARSIMONY**
