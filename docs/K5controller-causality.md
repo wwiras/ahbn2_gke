@@ -721,3 +721,39 @@ Stage I-A made zero production-code, YAML-semantic, test-semantic, Docker-image,
 **STAGE I-A PASS — LOW/MODERATE/HIGH FANOUT ACTION SEMANTICS FORMALLY DECLARED**
 
 Stage I-B is authorized to derive a scientifically principled mapping from the reachable canonical weight domain to LOW/MODERATE/HIGH without using benchmark performance and without modifying the frozen score.
+
+# Stage I-B — Principled Fanout Actuator Mapping Derivation
+
+## Domain, semantics, and candidate family
+
+Stage I-B preserves the Stage I-A declaration that fanouts 2, 3, and 4 are canonical LOW, MODERATE, and HIGH actions and must all be reachable. The frozen score `z=-d+l+u+c` has exact domain `[-1,3]`; monotonic sigmoid gives the reachable weight domain `[sigma(-1),sigma(3)] = [0.2689414213699951,0.9525741268224334]`. The all-zero pressure state gives `z=0`, `w=.5`, the natural orientation center.
+
+The mapping was derived in score space because `z` is the signed additive evidence balance: negative means conservation orientation, zero means balance, and positive means robustness orientation. Arbitrary weight thresholds and equal divisions of reachable weight endpoints would ignore that semantics. In the absence of independent asymmetry evidence, the evaluated family uses symmetric margins around zero: LOW for `z<=-delta`, MODERATE for `-delta<z<delta`, and HIGH for `z>=delta`. Sigmoid symmetry then gives weight thresholds `w_H=1-w_L`.
+
+Candidate deltas `.20`, `.25`, `.30`, `.40`, and `.50` were evaluated only against reachability, neutral centering, directional semantics, monotonicity, boundedness, determinism, explainability, mode/fanout separation, symmetry, and canonical-domain inclusion. All five make all three actions reachable, map `z=0` to MODERATE and `z=±1` to LOW/HIGH, and permit slightly negative Cluster+3 and slightly positive Gossip+3. Therefore the structural criteria alone do not rank them.
+
+## Parsimony selection
+
+The declared minimum-assumption rule selects `delta=.25`. It is a simple quarter of the normalized single-pressure range and the only evaluated candidate aligned with Stage F's already-declared quarter-scale diagnostic semantics. Stage F's pressure bands remain diagnostic rather than runtime thresholds: Stage I-B does not map a raw pressure band directly to fanout. It translates the existing semantic proposition that less than a quarter-unit is weak into a symmetric margin on the *net additive evidence balance*. This is prior policy reuse, not benchmark fitting or post-hoc performance convenience.
+
+The alternatives add unsupported assumptions: `.20` narrows MODERATE without an anchor; `.30` introduces ungrounded decimal precision; `.40` and `.50` broaden weak/balanced net evidence without a policy basis. Delta `.25` retains a substantial score-width `.50` MODERATE band, makes `±1` clearly LOW/HIGH, introduces no asymmetry, and preserves mode/intensity separation. The Stage F conflict `d=.70,u=.45` gives `z=-.25` and lies at the inclusive LOW boundary; `d=.70,u=.80` gives `z=+.10` and remains MODERATE while its mode is Gossip, explicitly demonstrating that Gossip does not automatically mean HIGH.
+
+## Selected mapping and comparison
+
+The derived mapping is:
+
+```text
+z <= -0.25        -> LOW / fanout 2
+-0.25 < z < 0.25 -> MODERATE / fanout 3
+z >= +0.25        -> HIGH / fanout 4
+```
+
+Equivalent thresholds are `w_L=sigma(-.25)=0.43782349911420193` and `w_H=sigma(.25)=0.5621765008857981`. LOW includes equality at the lower threshold, HIGH includes equality at the upper threshold, and MODERATE has open boundaries. Within the canonical domain, all regions are nonempty. The mapping is monotone, bounded `[2,4]`, deterministic, and simple; `z=-1`, `0`, and `+1` map to LOW, MODERATE, and HIGH respectively.
+
+The old `round(2+2w)` thresholds `.25/.75` emerged from interpolation plus rounding, placed LOW outside the canonical reachable range, and did not explicitly encode the declared action policy. The new design centers intensity around neutral evidence and preserves MODERATE on both sides of the unchanged mode threshold. No performance result, trace distribution, GKE run, or endpoint equal-width partition influenced selection.
+
+Stage I-B made zero production-controller, YAML-semantic, regression-test-semantic, Docker-image, and GKE changes. The score, sigmoid, mode rule, coefficients, references, observations, EWMA, and all frozen parameters remain unchanged. Detailed analytical artifacts are under `outputs/k5_fanout_stageIB_mapping/`.
+
+**STAGE I-B PASS — PRINCIPLED FANOUT MAPPING DERIVED**
+
+Stage I-C is authorized to implement exactly the selected downstream mapping without modifying frozen upstream semantics. Any later corrected image must use a new immutable tag.
