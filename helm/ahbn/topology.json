@@ -1,105 +1,28 @@
 {
-  "run_id": "k5_dcsoc_seed42_factor1.0",
-  "experiment": "k5_dcsoc_seed42_factor1.0",
+  "run_id": "k5_ahbn_seed46_factor3.0",
+  "experiment": "k5_ahbn_seed46_factor3.0",
   "mode": "bottleneck",
-  "seed": 42,
-  "strategy": "dcsoc",
+  "seed": 46,
+  "strategy": "ahbn",
   "num_nodes": 20,
   "topology_type": "ba",
   "edge_prob": 0.2,
   "ba_m": 2,
   "message_source": 0,
-  "fanout": null,
+  "fanout": 3,
   "num_clusters": 4,
   "dcsoc": {
     "eps": 2.0,
     "min_samples": 3,
-    "master_id": 0,
-    "structural_edges": [
-      [
-        0,
-        1
-      ],
-      [
-        0,
-        2
-      ],
-      [
-        0,
-        3
-      ],
-      [
-        0,
-        4
-      ],
-      [
-        0,
-        5
-      ],
-      [
-        0,
-        6
-      ],
-      [
-        0,
-        7
-      ],
-      [
-        0,
-        8
-      ],
-      [
-        0,
-        9
-      ],
-      [
-        0,
-        10
-      ],
-      [
-        0,
-        11
-      ],
-      [
-        0,
-        12
-      ],
-      [
-        0,
-        13
-      ],
-      [
-        0,
-        14
-      ],
-      [
-        0,
-        15
-      ],
-      [
-        0,
-        16
-      ],
-      [
-        0,
-        17
-      ],
-      [
-        0,
-        18
-      ],
-      [
-        0,
-        19
-      ]
-    ],
+    "master_id": null,
+    "structural_edges": [],
     "dynamic_maintenance": false
   },
   "settle_time": 18.0,
   "failure": {
     "mode": "bottleneck",
     "trigger_time": 0.5,
-    "overload_delay_ms": 700,
+    "overload_delay_ms": 2100,
     "num_events": 3,
     "interval_sec": 1.0,
     "target_type": "mixed"
@@ -107,17 +30,17 @@
   "bottleneck": {
     "enabled": true,
     "target": "important_peer",
-    "delay_ms": 700
+    "delay_ms": 2100
   },
   "workload": {
     "message_count": 20,
     "message_interval": 0.4
   },
   "k5": {
-    "algorithm": "dcsoc",
-    "seed": 42,
-    "overload_factor": 1.0,
-    "overload_delay_ms": 700
+    "algorithm": "ahbn",
+    "seed": 46,
+    "overload_factor": 3.0,
+    "overload_delay_ms": 2100
   },
   "ahbn": {
     "mode_threshold": 0.5,
@@ -131,14 +54,13 @@
         1,
         2,
         3,
+        4,
         5,
+        6,
         7,
+        8,
         9,
-        10,
-        11,
-        13,
         14,
-        17,
         18,
         19
       ],
@@ -149,59 +71,18 @@
         1,
         2,
         3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
+        4
       ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "core",
-      "dcsoc_parent": null,
-      "dcsoc_children": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "dcsoc_core_neighbors": []
+      "gateway_neighbors": [
+        5
+      ]
     },
     "1": {
       "neighbors": [
         0,
-        3,
-        4,
         6,
-        7,
         8,
-        15,
-        17
+        11
       ],
       "cluster_id": 0,
       "is_cluster_head": false,
@@ -210,257 +91,19 @@
         0,
         2,
         3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
+        4
       ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
+      "gateway_neighbors": []
     },
     "2": {
       "neighbors": [
         0,
-        4,
-        16
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
         3,
         4,
-        5,
-        6,
-        7,
-        8,
         9,
         10,
-        11,
         12,
         13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "3": {
-      "neighbors": [
-        0,
-        1,
-        8
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "4": {
-      "neighbors": [
-        1,
-        2,
-        5,
-        6,
-        12,
-        13,
-        15,
-        16,
-        18,
-        19
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "5": {
-      "neighbors": [
-        0,
-        4,
-        11,
-        12
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "6": {
-      "neighbors": [
-        1,
-        4,
-        9
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "7": {
-      "neighbors": [
-        0,
-        1
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "8": {
-      "neighbors": [
-        1,
-        3,
-        10,
         14
       ],
       "cluster_id": 0,
@@ -469,34 +112,16 @@
       "cluster_members": [
         0,
         1,
-        2,
         3,
-        4,
-        5,
-        6,
-        7,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
+        4
       ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
+      "gateway_neighbors": []
     },
-    "9": {
+    "3": {
       "neighbors": [
         0,
-        6
+        2,
+        17
       ],
       "cluster_id": 0,
       "is_cluster_head": false,
@@ -505,33 +130,17 @@
         0,
         1,
         2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
+        4
       ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
+      "gateway_neighbors": []
     },
-    "10": {
+    "4": {
       "neighbors": [
         0,
-        8
+        2,
+        5,
+        7,
+        10
       ],
       "cluster_id": 0,
       "is_cluster_head": false,
@@ -540,343 +149,267 @@
         0,
         1,
         2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
+        3
       ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
+      "gateway_neighbors": []
     },
-    "11": {
-      "neighbors": [
-        0,
-        5
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "12": {
-      "neighbors": [
-        4,
-        5
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "13": {
+    "5": {
       "neighbors": [
         0,
         4
       ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
+      "cluster_id": 1,
+      "is_cluster_head": true,
+      "cluster_head_id": 5,
       "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
         6,
         7,
         8,
-        9,
-        10,
-        11,
-        12,
-        14,
-        15,
-        16,
-        17,
-        18,
-        19
+        9
       ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "14": {
-      "neighbors": [
+      "gateway_neighbors": [
         0,
-        8
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        15,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
+        10
+      ]
     },
-    "15": {
-      "neighbors": [
-        1,
-        4
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        16,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "16": {
-      "neighbors": [
-        2,
-        4
-      ],
-      "cluster_id": 0,
-      "is_cluster_head": false,
-      "cluster_head_id": 0,
-      "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        17,
-        18,
-        19
-      ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
-    },
-    "17": {
+    "6": {
       "neighbors": [
         0,
         1
       ],
-      "cluster_id": 0,
+      "cluster_id": 1,
       "is_cluster_head": false,
-      "cluster_head_id": 0,
+      "cluster_head_id": 5,
       "cluster_members": [
+        5,
+        7,
+        8,
+        9
+      ],
+      "gateway_neighbors": []
+    },
+    "7": {
+      "neighbors": [
+        0,
+        4,
+        12
+      ],
+      "cluster_id": 1,
+      "is_cluster_head": false,
+      "cluster_head_id": 5,
+      "cluster_members": [
+        5,
+        6,
+        8,
+        9
+      ],
+      "gateway_neighbors": []
+    },
+    "8": {
+      "neighbors": [
         0,
         1,
-        2,
-        3,
-        4,
+        17
+      ],
+      "cluster_id": 1,
+      "is_cluster_head": false,
+      "cluster_head_id": 5,
+      "cluster_members": [
         5,
         6,
         7,
-        8,
-        9,
-        10,
+        9
+      ],
+      "gateway_neighbors": []
+    },
+    "9": {
+      "neighbors": [
+        0,
+        2,
+        11,
+        13,
+        15
+      ],
+      "cluster_id": 1,
+      "is_cluster_head": false,
+      "cluster_head_id": 5,
+      "cluster_members": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "gateway_neighbors": []
+    },
+    "10": {
+      "neighbors": [
+        2,
+        4,
+        16,
+        19
+      ],
+      "cluster_id": 2,
+      "is_cluster_head": true,
+      "cluster_head_id": 10,
+      "cluster_members": [
         11,
         12,
         13,
-        14,
+        14
+      ],
+      "gateway_neighbors": [
+        5,
+        15
+      ]
+    },
+    "11": {
+      "neighbors": [
+        1,
+        9,
+        16
+      ],
+      "cluster_id": 2,
+      "is_cluster_head": false,
+      "cluster_head_id": 10,
+      "cluster_members": [
+        10,
+        12,
+        13,
+        14
+      ],
+      "gateway_neighbors": []
+    },
+    "12": {
+      "neighbors": [
+        2,
+        7,
+        18
+      ],
+      "cluster_id": 2,
+      "is_cluster_head": false,
+      "cluster_head_id": 10,
+      "cluster_members": [
+        10,
+        11,
+        13,
+        14
+      ],
+      "gateway_neighbors": []
+    },
+    "13": {
+      "neighbors": [
+        2,
+        9,
+        15
+      ],
+      "cluster_id": 2,
+      "is_cluster_head": false,
+      "cluster_head_id": 10,
+      "cluster_members": [
+        10,
+        11,
+        12,
+        14
+      ],
+      "gateway_neighbors": []
+    },
+    "14": {
+      "neighbors": [
+        0,
+        2
+      ],
+      "cluster_id": 2,
+      "is_cluster_head": false,
+      "cluster_head_id": 10,
+      "cluster_members": [
+        10,
+        11,
+        12,
+        13
+      ],
+      "gateway_neighbors": []
+    },
+    "15": {
+      "neighbors": [
+        9,
+        13
+      ],
+      "cluster_id": 3,
+      "is_cluster_head": true,
+      "cluster_head_id": 15,
+      "cluster_members": [
+        16,
+        17,
+        18,
+        19
+      ],
+      "gateway_neighbors": [
+        10
+      ]
+    },
+    "16": {
+      "neighbors": [
+        10,
+        11
+      ],
+      "cluster_id": 3,
+      "is_cluster_head": false,
+      "cluster_head_id": 15,
+      "cluster_members": [
+        15,
+        17,
+        18,
+        19
+      ],
+      "gateway_neighbors": []
+    },
+    "17": {
+      "neighbors": [
+        3,
+        8
+      ],
+      "cluster_id": 3,
+      "is_cluster_head": false,
+      "cluster_head_id": 15,
+      "cluster_members": [
         15,
         16,
         18,
         19
       ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
+      "gateway_neighbors": []
     },
     "18": {
       "neighbors": [
         0,
-        4
+        12
       ],
-      "cluster_id": 0,
+      "cluster_id": 3,
       "is_cluster_head": false,
-      "cluster_head_id": 0,
+      "cluster_head_id": 15,
       "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
         15,
         16,
         17,
         19
       ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
+      "gateway_neighbors": []
     },
     "19": {
       "neighbors": [
         0,
-        4
+        10
       ],
-      "cluster_id": 0,
+      "cluster_id": 3,
       "is_cluster_head": false,
-      "cluster_head_id": 0,
+      "cluster_head_id": 15,
       "cluster_members": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
         15,
         16,
         17,
         18
       ],
-      "gateway_neighbors": [],
-      "dcsoc_role": "leaf",
-      "dcsoc_parent": 0,
-      "dcsoc_children": [],
-      "dcsoc_core_neighbors": []
+      "gateway_neighbors": []
     }
   }
 }
