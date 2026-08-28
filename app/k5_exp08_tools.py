@@ -18,13 +18,24 @@ T_CRIT_DF4 = 2.7764451051977987
 
 def load_jsonl(path: Path) -> list[dict]:
     rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    decoder = json.JSONDecoder()
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         if not line.startswith("{"):
             continue
+        pending = line
+        decoded = []
         try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
+            while pending.strip():
+                value, end = decoder.raw_decode(pending.lstrip())
+                if not isinstance(value, dict):
+                    raise ValueError("expected JSON object")
+                decoded.append(value)
+                pending = pending.lstrip()[end:]
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ValueError(f"{path}:{line_number}: invalid JSONL record") from exc
+        rows.extend(decoded)
     return rows
 
 
