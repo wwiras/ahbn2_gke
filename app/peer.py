@@ -459,7 +459,8 @@ class PeerState:
         candidates = [
             n
             for n in self.neighbors
-            if n != sender_id and n != self.peer_id
+            if n not in (sender_id, self.peer_id)
+            and n not in self.unavailable_neighbors
         ]
 
         k = min(
@@ -525,6 +526,19 @@ class PeerState:
                         bottleneck_active=self.bottleneck_active,
                         bottleneck_delay_ms=self.bottleneck_delay_ms,
                         is_cluster_head=self.is_cluster_head,
+                    )
+
+                elif resp.message == "duplicate":
+                    if dst_peer in self.unavailable_neighbors:
+                        self.unavailable_neighbors.remove(dst_peer)
+                        self.observations.record_join()
+                    log_event(
+                        event="forward_duplicate_ack",
+                        run_id=self.run_id,
+                        experiment=self.experiment,
+                        peer_id=self.peer_id,
+                        dst_peer=dst_peer,
+                        message_id=envelope.message_id,
                     )
 
                 else:
