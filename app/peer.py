@@ -387,9 +387,17 @@ class PeerState:
             return []
         return [self.cluster_head_id]
 
+    def diagnostic_cluster_eligible_peers(self, sender_id: int) -> list[int]:
+        """Reconstruct the full deterministic cluster candidate list for H2."""
+        return self.cluster_targets(
+            sender_id,
+            fanout=len(self.cluster_members) + len(self.gateway_neighbors) + 1,
+        )
+
     def target_peers(
         self,
         sender_id: int,
+        message_id: str | None = None,
     ) -> list[int]:
         # --------------------------------------------------
         # DC-SoC static structural DAG
@@ -450,9 +458,14 @@ class PeerState:
         self.adaptive_update()
 
         if self.mode == "cluster":
-            return self.cluster_targets(
+            targets = self.cluster_targets(
                 sender_id, fanout=self.fanout
             )
+            eligible = self.diagnostic_cluster_eligible_peers(sender_id)
+            self.log_ahbn_forwarding_decision(
+                sender_id, message_id, eligible, targets
+            )
+            return targets
 
         targets: list[int] = []
 
@@ -477,7 +490,48 @@ class PeerState:
         # is excluded before sampling so it cannot consume controller fanout.
         targets = list(dict.fromkeys(targets))
 
+        self.log_ahbn_forwarding_decision(
+            sender_id, message_id, candidates, targets
+        )
+
         return targets
+
+    def log_ahbn_forwarding_decision(
+        self,
+        sender_id: int,
+        message_id: str | None,
+        eligible: list[int],
+        selected: list[int],
+    ) -> None:
+        """Emit the temporary H2 observation after canonical selection."""
+        topology = list(dict.fromkeys(self.neighbors))
+        unavailable = sorted(self.unavailable_neighbors)
+        selected_copy = list(selected)
+        eligible_copy = list(eligible)
+        log_event(
+            event="ahbn_forwarding_decision",
+            run_id=getattr(self, "run_id", None),
+            experiment=getattr(self, "experiment", None),
+            message_id=message_id,
+            sender=self.peer_id,
+            incoming_sender=sender_id,
+            mode=self.mode,
+            score=getattr(getattr(self, "ahbn_state", None), "score", None),
+            weight=getattr(getattr(self, "ahbn_state", None), "weight", None),
+            controller_fanout=self.fanout,
+            fanout_requested=self.fanout,
+            topology_neighbors=topology,
+            active_neighbors=[
+                n for n in topology if n not in self.unavailable_neighbors
+            ],
+            unavailable_neighbors=unavailable,
+            eligible_neighbors=eligible_copy,
+            selected_peers=selected_copy,
+            selected_peer_count=len(selected_copy),
+            omitted_eligible_peers=[
+                n for n in eligible_copy if n not in selected_copy
+            ],
+        )
 
     def forward_to_peer(
         self,
@@ -675,7 +729,8 @@ class PeerState:
         )
 
         targets = self.target_peers(
-            sender_id=envelope.sender_id
+            sender_id=envelope.sender_id,
+            message_id=envelope.message_id,
         )
 
         next_env = peer_pb2.Envelope(
