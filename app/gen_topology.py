@@ -587,6 +587,9 @@ def main():
 
         "k5": cfg.get("k5", {}),
 
+        # Experiment-only metadata consumed by the isolated H2 selector switch.
+        "k5_h2": cfg.get("k5_h2", {}),
+
         # -----------------------------------------------
         # AHBN parameters
         # -----------------------------------------------

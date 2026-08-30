@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -85,6 +86,15 @@ class PeerState:
             "experiment",
             self.run_id,
         )
+
+        h2_cfg = topo.get("k5_h2", {})
+        self.h2_selector_treatment = h2_cfg.get("treatment", "selector_control")
+        if self.h2_selector_treatment not in {"selector_control", "seeded_uniform"}:
+            raise RuntimeError(
+                f"unsupported H2 selector treatment: {self.h2_selector_treatment}"
+            )
+        self.h2_seed = int(h2_cfg.get("seed", topo.get("seed", 42)))
+        self.h2_repetition = h2_cfg.get("repetition")
 
         self.exp_mode = topo.get(
             "mode",
@@ -394,6 +404,31 @@ class PeerState:
             fanout=len(self.cluster_members) + len(self.gateway_neighbors) + 1,
         )
 
+    def h2_seeded_uniform_selection(
+        self,
+        eligible: list[int],
+        fanout: int,
+        message_id: str | None,
+    ) -> list[int]:
+        """H2-only reproducible uniform sample from the existing eligible set."""
+        population = sorted(dict.fromkeys(eligible))
+        k = min(int(fanout), len(population))
+        if k <= 0:
+            return []
+        identity = json.dumps(
+            {
+                "eligible": population,
+                "fanout": int(fanout),
+                "message_id": message_id,
+                "peer_id": self.peer_id,
+                "seed": self.h2_seed,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        event_seed = int.from_bytes(hashlib.sha256(identity).digest()[:16], "big")
+        return random.Random(event_seed).sample(population, k)
+
     def target_peers(
         self,
         sender_id: int,
@@ -458,10 +493,12 @@ class PeerState:
         self.adaptive_update()
 
         if self.mode == "cluster":
-            targets = self.cluster_targets(
-                sender_id, fanout=self.fanout
-            )
             eligible = self.diagnostic_cluster_eligible_peers(sender_id)
+            targets = self.cluster_targets(sender_id, fanout=self.fanout)
+            if getattr(self, "h2_selector_treatment", "selector_control") == "seeded_uniform":
+                targets = self.h2_seeded_uniform_selection(
+                    eligible, self.fanout, message_id
+                )
             self.log_ahbn_forwarding_decision(
                 sender_id, message_id, eligible, targets
             )
@@ -482,9 +519,12 @@ class PeerState:
         )
 
         if k > 0:
-            targets.extend(
-                random.sample(candidates, k)
-            )
+            if getattr(self, "h2_selector_treatment", "selector_control") == "seeded_uniform":
+                targets.extend(self.h2_seeded_uniform_selection(
+                    candidates, self.fanout, message_id
+                ))
+            else:
+                targets.extend(random.sample(candidates, k))
 
         # Frozen v0.61 deduplicates while preserving the sampled order. Self
         # is excluded before sampling so it cannot consume controller fanout.
@@ -512,6 +552,9 @@ class PeerState:
             event="ahbn_forwarding_decision",
             run_id=getattr(self, "run_id", None),
             experiment=getattr(self, "experiment", None),
+            seed=getattr(self, "h2_seed", None),
+            repetition=getattr(self, "h2_repetition", None),
+            treatment=getattr(self, "h2_selector_treatment", "selector_control"),
             message_id=message_id,
             sender=self.peer_id,
             incoming_sender=sender_id,
