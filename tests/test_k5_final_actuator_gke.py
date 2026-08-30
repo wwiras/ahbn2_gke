@@ -8,49 +8,45 @@ APP = Path(__file__).parents[1] / "app"
 sys.path.insert(0, str(APP))
 
 from ahbn_controller import AHBNState, CanonicalAHBNController
-from k5_final_actuator_policy import actuator_state, requested_fanout
+from k5_final_actuator_policy import requested_fanout
 
 
-def test_actual_ne_mapping():
-    expected = {
-        0: (0, 0, 0), 1: (1, 1, 1), 2: (1, 2, 2), 3: (1, 2, 3),
-        4: (2, 3, 4), 5: (2, 4, 5), 6: (2, 4, 6), 7: (3, 5, 6),
-        9: (3, 6, 6), 12: (4, 6, 6),
-    }
-    for ne, values in expected.items():
-        assert tuple(requested_fanout("S5-C6", state, ne)
-                     for state in ("LOW", "MODERATE", "HIGH")) == values
+@pytest.mark.parametrize(("score", "expected"), [
+    (0.249999, 3), (0.25, 4), (0.899999, 4),
+    (0.90, 5), (1.499999, 5), (1.50, 6),
+])
+def test_s5_frozen_boundaries(score, expected):
+    assert requested_fanout("S5", score) == expected
 
 
 def test_s0_mapping():
-    for ne in (0, 1, 2, 3, 4, 5, 6, 7, 9, 12):
-        assert tuple(requested_fanout("S0", state, ne)
-                     for state in ("LOW", "MODERATE", "HIGH")) == (
-                         min(2, ne), min(3, ne), min(4, ne))
+    assert requested_fanout("S0", 0.25) == 4
+    assert requested_fanout("S0", 0.90) == 4
+    assert requested_fanout("S0", 1.50) == 4
+    assert requested_fanout("S0", -0.25) == 2
 
 
 def test_treatment_isolation():
     observations = (0.1, 0.9, 0.8, 0.2)
     decisions = []
-    for _treatment in ("S0", "S5-C6"):
+    for _treatment in ("S0", "S5"):
         decision = CanonicalAHBNController().update(AHBNState(), *observations)
         decisions.append(decision)
     a, b = decisions
     assert (a.score, a.weight, a.mode) == (b.score, b.weight, b.mode)
-    state = actuator_state(a.score)
-    assert requested_fanout("S0", state, 9) == 4
-    assert requested_fanout("S5-C6", state, 9) == 6
+    assert requested_fanout("S0", 1.50) == 4
+    assert requested_fanout("S5", 1.50) == 6
 
 
-def test_no_hidden_ne9_cap():
-    assert requested_fanout("S5-C6", "LOW", 12) == 4
+def test_actuator_command_is_not_redefined_by_eligible_count():
+    assert requested_fanout("S5", 1.50) == 6
 
 
 def test_parser_understands_both_treatments(tmp_path):
     script = Path(__file__).parents[1] / "scripts" / "k5_final_actuator_analysis.py"
     spec = importlib.util.spec_from_file_location("k5_final_analysis", script)
     analysis = importlib.util.module_from_spec(spec); spec.loader.exec_module(analysis)
-    for treatment, requested in (("S0", 4), ("S5-C6", 6)):
+    for treatment, requested in (("S0", 4), ("S5", 6)):
         run_dir = tmp_path / treatment; run_dir.mkdir()
         (run_dir / "metrics.json").write_text(json.dumps({
             "delivery_ratio": 0.9, "propagation_delay": 1.2,
@@ -58,7 +54,7 @@ def test_parser_understands_both_treatments(tmp_path):
         }), encoding="utf-8")
         events = [
             {"event": "k5_final_actuator_decision", "treatment": treatment,
-             "eligible_neighbor_count": 9, "actuator_state": "HIGH",
+             "eligible_neighbor_count": 9, "score": 1.5,
              "requested_fanout": requested, "actual_fanout": requested},
             {"event": "message_injected", "message_id": "m1"},
             {"event": "received_new", "message_id": "m1", "peer_id": 1},
@@ -89,7 +85,7 @@ def _complete_final_run(path, analysis):
          "latency_score_contribution": 0.1, "utilization_score_contribution": 0.2,
          "churn_score_contribution": 0.1},
         {"event": "k5_final_actuator_decision", "treatment": "S0",
-         "eligible_neighbor_count": 9, "actuator_state": "HIGH",
+         "eligible_neighbor_count": 9, "score": 0.3,
          "requested_fanout": 4, "actual_fanout": 4},
     ])
     (path / "logs.jsonl").write_text(

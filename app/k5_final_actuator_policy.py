@@ -1,27 +1,20 @@
-"""Pure experiment-local S0/S5-C6 fanout mappings."""
+"""Pure experiment-local frozen S0/S5 fanout mappings."""
 
-TREATMENTS = {"S0", "S5-C6"}
-
-
-def actuator_state(score: float) -> str:
-    if score <= -0.25:
-        return "LOW"
-    if score >= 0.25:
-        return "HIGH"
-    return "MODERATE"
+TREATMENTS = {"S0", "S5"}
 
 
-def requested_fanout(treatment: str, state: str, eligible_count: int) -> int:
+def requested_fanout(treatment: str, score: float) -> int:
     if treatment not in TREATMENTS:
         raise ValueError(f"unsupported actuator treatment: {treatment}")
-    if state not in {"LOW", "MODERATE", "HIGH"}:
-        raise ValueError(f"unsupported actuator state: {state}")
-    ne = max(0, int(eligible_count))
-    if treatment == "S0":
-        return min({"LOW": 2, "MODERATE": 3, "HIGH": 4}[state], ne)
-    base = {
-        "LOW": (ne + 2) // 3,
-        "MODERATE": (2 * ne + 2) // 3,
-        "HIGH": ne,
-    }[state]
-    return min(base, 6, ne)
+    z = float(score)
+    if z <= -0.25:
+        budget = 2
+    elif z < 0.25:
+        budget = 3
+    elif treatment == "S0" or z < 0.90:
+        budget = 4
+    elif z < 1.50:
+        budget = 5
+    else:
+        budget = 6
+    return budget

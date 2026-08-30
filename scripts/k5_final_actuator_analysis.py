@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 SEEDS = (42, 43, 44, 45, 46)
-TREATMENTS = ("S0", "S5-C6")
+TREATMENTS = ("S0", "S5")
 METRICS = ("delivery_ratio", "propagation_delay", "duplicates", "send_attempts",
            "total_forwards", "new_reach", "new_reach_efficiency")
 MANDATORY_RUN_FILES = ("topology.json", "logs.jsonl", "pods.json", "controller.log")
@@ -83,7 +83,9 @@ def validate_final_run(run_dir: Path, seed: int, treatment: str,
     observed_bad = bad.intersection(events)
     if observed_bad:
         raise ValueError(f"{run_dir}: forbidden failure/churn events: {sorted(observed_bad)}")
-    pods = json.loads((run_dir / "pods.json").read_text(encoding="utf-8")).get("items", [])
+    pods_path = run_dir / "pods.json"
+    pods = (json.loads(pods_path.read_text(encoding="utf-8")).get("items", [])
+            if pods_path.is_file() else [])
     unhealthy = []
     for pod in pods:
         states = pod.get("status", {}).get("containerStatuses", [])
@@ -107,14 +109,19 @@ def validate_final_run(run_dir: Path, seed: int, treatment: str,
     for row in decisions:
         if row.get("treatment") != treatment:
             fanout_violations += 1; continue
-        ne = int(row["eligible_neighbor_count"]); state = row["actuator_state"]
-        if treatment == "S0":
-            expected = min({"LOW": 2, "MODERATE": 3, "HIGH": 4}[state], ne)
+        ne = int(row["eligible_neighbor_count"]); z = float(row["score"])
+        if z <= -0.25:
+            expected = 2
+        elif z < 0.25:
+            expected = 3
+        elif treatment == "S0" or z < 0.90:
+            expected = 4
+        elif z < 1.50:
+            expected = 5
         else:
-            expected = min({"LOW": (ne + 2) // 3,
-                            "MODERATE": (2 * ne + 2) // 3, "HIGH": ne}[state], 6, ne)
+            expected = 6
         fanout_violations += int(row["requested_fanout"] != expected)
-        fanout_violations += int(row["actual_fanout"] > row["requested_fanout"])
+        fanout_violations += int(row["actual_fanout"] > min(row["requested_fanout"], ne))
     if trace_violations or fanout_violations:
         raise ValueError(f"{run_dir}: semantic violations: controller={trace_violations} fanout={fanout_violations}")
     injected = [row for row in rows if row.get("event") == "message_injected"]
@@ -151,19 +158,28 @@ def summarize(run_dir: Path, seed: int, treatment: str) -> dict:
     if any(r.get("treatment") != treatment for r in decisions):
         raise ValueError(f"{run_dir}: unexpected treatment trace")
     violations = 0
-    state_counts = Counter()
+    fanout_counts = Counter()
+    z_region_counts = Counter()
     eligible_counts = Counter()
     for row in decisions:
-        ne = int(row["eligible_neighbor_count"]); state = row["actuator_state"]
-        if treatment == "S0":
-            expected = min({"LOW": 2, "MODERATE": 3, "HIGH": 4}[state], ne)
+        ne = int(row["eligible_neighbor_count"]); z = float(row["score"])
+        if z <= -0.25:
+            base = 2
+        elif z < 0.25:
+            base = 3
+        elif treatment == "S0" or z < 0.90:
+            base = 4
+        elif z < 1.50:
+            base = 5
         else:
-            base = {"LOW": (ne + 2) // 3, "MODERATE": (2 * ne + 2) // 3,
-                    "HIGH": ne}[state]
-            expected = min(base, 6, ne)
+            base = 6
+        expected = base
         violations += int(row["requested_fanout"] != expected)
-        violations += int(row["actual_fanout"] > row["requested_fanout"])
-        state_counts[state] += 1; eligible_counts[ne] += 1
+        violations += int(row["actual_fanout"] > min(row["requested_fanout"], ne))
+        fanout_counts[int(row["requested_fanout"])] += 1
+        z_region_counts[">=0.90"] += int(z >= 0.90)
+        z_region_counts[">=1.50"] += int(z >= 1.50)
+        eligible_counts[ne] += 1
     if violations:
         raise ValueError(f"{run_dir}: fanout semantic violations={violations}")
     send_events = {"forward", "forward_duplicate_ack", "forward_failed", "forward_rejected"}
@@ -171,14 +187,30 @@ def summarize(run_dir: Path, seed: int, treatment: str) -> dict:
     injected = {str(r["message_id"]) for r in rows if r.get("event") == "message_injected"}
     reached = {(str(r["message_id"]), int(r["peer_id"])) for r in rows
                if r.get("event") == "received_new" and str(r.get("message_id")) in injected}
+    timestamps = [float(r["ts"]) for r in rows if r.get("ts") is not None]
+    pods_path = run_dir / "pods.json"
+    pods = (json.loads(pods_path.read_text(encoding="utf-8")).get("items", [])
+            if pods_path.is_file() else [])
+    image_ids = sorted({state.get("imageID") for pod in pods
+                        for state in pod.get("status", {}).get("containerStatuses", [])
+                        if state.get("imageID")})
     return {"seed": seed, "treatment": treatment,
+            "run_repetition": 1, "scenario_severity": "factor=2.0;delay_ms=1400",
+            "controller_version": "canonical-sha256:dee8cb8e81494bc1448793076803a330602d613e9654ac7fa572d8203f6cc7c8",
+            "image_digest": ";".join(image_ids), "config_override": f"actuator_treatment={treatment}",
+            "start_timestamp": min(timestamps) if timestamps else None,
+            "end_timestamp": max(timestamps) if timestamps else None,
             "delivery_ratio": metrics["delivery_ratio"],
             "propagation_delay": metrics["propagation_delay"],
             "duplicates": metrics["duplicates"], "send_attempts": sends,
             "total_forwards": metrics["total_forwards"], "new_reach": len(reached),
             "new_reach_efficiency": len(reached) / sends if sends else math.nan,
-            "low_count": state_counts["LOW"], "moderate_count": state_counts["MODERATE"],
-            "high_count": state_counts["HIGH"],
+            **{f"k{k}_count": fanout_counts[k] for k in range(2, 7)},
+            **{f"k{k}_pct": 100 * fanout_counts[k] / len(decisions) for k in range(2, 7)},
+            "z_ge_0_90_count": z_region_counts[">=0.90"],
+            "z_ge_0_90_pct": 100 * z_region_counts[">=0.90"] / len(decisions),
+            "z_ge_1_50_count": z_region_counts[">=1.50"],
+            "z_ge_1_50_pct": 100 * z_region_counts[">=1.50"] / len(decisions),
             "eligible_counts_json": json.dumps(dict(sorted(eligible_counts.items()))),
             "mean_requested_fanout": statistics.mean(r["requested_fanout"] for r in decisions),
             "mean_actual_fanout": statistics.mean(r["actual_fanout"] for r in decisions)}
@@ -193,37 +225,77 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 def analyze(root: Path) -> None:
     rows = [summarize(root / "runs" / f"seed{seed}" / treatment, seed, treatment)
             for seed in SEEDS for treatment in TREATMENTS]
-    write_csv(root / "results" / "per_run.csv", rows)
+    write_csv(root / "per_run_results.csv", rows)
+    occupancy = [{key: row[key] for key in (
+        "seed", "treatment", "k2_count", "k2_pct", "k3_count", "k3_pct",
+        "k4_count", "k4_pct", "k5_count", "k5_pct", "k6_count", "k6_pct",
+        "z_ge_0_90_count", "z_ge_0_90_pct", "z_ge_1_50_count", "z_ge_1_50_pct")}
+        for row in rows]
+    write_csv(root / "actuator_occupancy.csv", occupancy)
+    controller_states = []
+    for seed in SEEDS:
+        for treatment in TREATMENTS:
+            run_dir = root / "runs" / f"seed{seed}" / treatment
+            latest_trace = {}
+            for event in load_jsonl(run_dir / "logs.jsonl"):
+                if event.get("event") == "ahbn_controller_trace":
+                    latest_trace[event.get("peer_id")] = event
+                elif event.get("event") == "k5_final_actuator_decision":
+                    trace = latest_trace.get(event.get("peer_id"), {})
+                    controller_states.append({
+                        "seed": seed, "treatment": treatment, "timestamp": event.get("ts"),
+                        "peer_id": event.get("peer_id"), "message_id": event.get("message_id"),
+                        "z": event.get("score"), "fanout": event.get("requested_fanout"),
+                        "actual_fanout": event.get("actual_fanout"), "mode": event.get("mode"),
+                        "d_hat": trace.get("d_hat"), "l_hat": trace.get("l_hat"),
+                        "u_hat": trace.get("u_hat"), "c_hat": trace.get("c_hat"),
+                    })
+    if not controller_states:
+        raise ValueError("no controller states available for controller_states.csv")
+    write_csv(root / "controller_states.csv", controller_states)
     pairs = []
     for seed in SEEDS:
         a = next(r for r in rows if r["seed"] == seed and r["treatment"] == "S0")
-        b = next(r for r in rows if r["seed"] == seed and r["treatment"] == "S5-C6")
+        b = next(r for r in rows if r["seed"] == seed and r["treatment"] == "S5")
         pair = {"seed": seed}
         for metric in METRICS:
-            pair[f"s0_{metric}"] = a[metric]; pair[f"s5_c6_{metric}"] = b[metric]
+            pair[f"s0_{metric}"] = a[metric]; pair[f"s5_{metric}"] = b[metric]
             pair[f"delta_{metric}"] = float(b[metric]) - float(a[metric])
+        pair["s5_k5_activations"] = b["k5_count"]
+        pair["s5_k6_activations"] = b["k6_count"]
         pairs.append(pair)
-    write_csv(root / "results" / "per_seed_paired.csv", pairs)
+    write_csv(root / "paired_results.csv", pairs)
     aggregate = []
     for metric in METRICS:
         av = [float(r[metric]) for r in rows if r["treatment"] == "S0"]
-        bv = [float(r[metric]) for r in rows if r["treatment"] == "S5-C6"]
-        aggregate.append({"metric": metric, "s0_mean": statistics.mean(av),
-                          "s5_c6_mean": statistics.mean(bv),
-                          "delta_s5_c6_minus_s0": statistics.mean(bv) - statistics.mean(av)})
-    write_csv(root / "results" / "aggregate.csv", aggregate)
+        bv = [float(r[metric]) for r in rows if r["treatment"] == "S5"]
+        aggregate.append({"metric": metric,
+                          "s0_mean": statistics.mean(av), "s5_mean": statistics.mean(bv),
+                          "delta_s5_minus_s0": statistics.mean(bv) - statistics.mean(av),
+                          "s0_median": statistics.median(av), "s5_median": statistics.median(bv),
+                          "s0_min": min(av), "s5_min": min(bv),
+                          "s0_max": max(av), "s5_max": max(bv),
+                          "s0_stddev": statistics.stdev(av), "s5_stddev": statistics.stdev(bv)})
+    write_csv(root / "aggregate_results.csv", aggregate)
+    (root / "summary.json").write_text(json.dumps({
+        "treatments": list(TREATMENTS), "seeds": list(SEEDS),
+        "scenario": {"topology": "BA", "n": 20, "m": 2, "source": "peer-0",
+                     "overload_factor": 2.0, "overload_delay_ms": 1400},
+        "aggregate": aggregate,
+        "classification": "PENDING_HUMAN_GATE_REVIEW",
+    }, indent=2) + "\n", encoding="utf-8")
     report = ["# K5 Final Actuator GKE Result", "",
               "Matched seeds 42--46; same frozen K5 factor 2.0 scenario. No exact event replay is claimed.", "",
-              "| Metric | S0 | S5-C6 | Delta C6-S0 |", "|---|---:|---:|---:|"]
+              "| Metric | S0 | S5 | Delta S5-S0 |", "|---|---:|---:|---:|"]
     for row in aggregate:
-        report.append(f"| {row['metric']} | {row['s0_mean']:.6g} | {row['s5_c6_mean']:.6g} | {row['delta_s5_c6_minus_s0']:.6g} |")
-    report += ["", "| Seed | S0 Delivery | C6 Delivery | Delta |",
+        report.append(f"| {row['metric']} | {row['s0_mean']:.6g} | {row['s5_mean']:.6g} | {row['delta_s5_minus_s0']:.6g} |")
+    report += ["", "| Seed | S0 Delivery | S5 Delivery | Delta |",
                "|---:|---:|---:|---:|"]
     for row in pairs:
-        report.append(f"| {row['seed']} | {row['s0_delivery_ratio']:.6g} | {row['s5_c6_delivery_ratio']:.6g} | {row['delta_delivery_ratio']:.6g} |")
-    report += ["", "Final classification pending conservative human interpretation:",
-               "`A. CLEAR S5-C6 WIN` or `B. NO CLEAR S5-C6 WIN`."]
-    summary = root / "summary" / "comparison.md"; summary.parent.mkdir(parents=True, exist_ok=True)
+        report.append(f"| {row['seed']} | {row['s0_delivery_ratio']:.6g} | {row['s5_delivery_ratio']:.6g} | {row['delta_delivery_ratio']:.6g} |")
+    report += ["", "Final classification must use the frozen gate: `A — CONFIRMED`, "
+               "`B — NOT CONFIRMED`, or `C — INCONCLUSIVE`."]
+    summary = root / "README.md"
     summary.write_text("\n".join(report) + "\n", encoding="utf-8")
     print(f"FINAL K5 analysis PASS: 10 runs, 5 matched seeds -> {root}")
 

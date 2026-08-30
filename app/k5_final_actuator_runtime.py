@@ -1,4 +1,4 @@
-"""Experiment-only S0 versus S5-C6 actuator wrapper.
+"""Experiment-only S0 versus frozen S5 actuator wrapper.
 
 The canonical controller and peer modules remain untouched.  This module replaces
 only the AHBN forwarding budget after the canonical controller has produced its
@@ -13,7 +13,7 @@ import os
 import random
 
 import peer
-from k5_final_actuator_policy import TREATMENTS, actuator_state, requested_fanout
+from k5_final_actuator_policy import TREATMENTS, requested_fanout
 
 
 def _configured_treatment() -> str:
@@ -33,11 +33,11 @@ def target_peers(self, sender_id: int, message_id: str | None = None) -> list[in
         return peer._K5_CANONICAL_TARGET_PEERS(self, sender_id, message_id)
 
     self.adaptive_update()
-    state = actuator_state(self.ahbn_state.score)
+    score = self.ahbn_state.score
 
     if self.mode == "cluster":
         eligible = self.diagnostic_cluster_eligible_peers(sender_id)
-        budget = requested_fanout(TREATMENT, state, len(eligible))
+        budget = requested_fanout(TREATMENT, score)
         targets = self.cluster_targets(sender_id, fanout=budget)
         if getattr(self, "h2_selector_treatment", "selector_control") == "seeded_uniform":
             targets = self.h2_seeded_uniform_selection(eligible, budget, message_id)
@@ -47,12 +47,13 @@ def target_peers(self, sender_id: int, message_id: str | None = None) -> list[in
             if n not in (sender_id, self.peer_id)
             and n not in self.unavailable_neighbors
         ]
-        budget = requested_fanout(TREATMENT, state, len(eligible))
-        if budget > 0:
+        budget = requested_fanout(TREATMENT, score)
+        k = min(budget, len(eligible))
+        if k > 0:
             if getattr(self, "h2_selector_treatment", "selector_control") == "seeded_uniform":
                 targets = self.h2_seeded_uniform_selection(eligible, budget, message_id)
             else:
-                targets = random.sample(eligible, budget)
+                targets = random.sample(eligible, k)
         else:
             targets = []
         targets = list(dict.fromkeys(targets))
@@ -63,8 +64,8 @@ def target_peers(self, sender_id: int, message_id: str | None = None) -> list[in
         event="k5_final_actuator_decision", run_id=self.run_id,
         experiment=self.experiment, peer_id=self.peer_id,
         treatment=TREATMENT, message_id=message_id, sender=self.peer_id,
-        incoming_sender=sender_id, score=self.ahbn_state.score,
-        weight=self.ahbn_state.weight, mode=self.mode, actuator_state=state,
+        incoming_sender=sender_id, score=score,
+        weight=self.ahbn_state.weight, mode=self.mode,
         eligible_neighbor_count=len(set(eligible)), canonical_fanout=canonical_fanout,
         requested_fanout=budget, actual_fanout=len(targets),
     )

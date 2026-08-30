@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
@@ -18,12 +18,27 @@ if [ "${1:-}" = "--resume" ]; then
 elif [ "$#" -ne 0 ]; then
   echo "Usage: $0 [--resume RESULT_ROOT]" >&2; exit 2
 else
-  RESULT_ROOT="${RESULT_ROOT:-${ROOT_DIR}/outputs/k5_shortest_actuator_solution_gke/${STAMP}}"
+  RESULT_ROOT="${RESULT_ROOT:-${ROOT_DIR}/outputs/k5_gke_s0_vs_s5/${STAMP}}"
 fi
 HASH_EXPECTED_CONTROLLER="dee8cb8e81494bc1448793076803a330602d613e9654ac7fa572d8203f6cc7c8"
 HASH_EXPECTED_PEER="64c529f9c32f732c8d4f2c5959c75c0bbed20252328b81b018eb35c6cef10b5a"
+CURRENT_STAGE="preflight"
+CURRENT_SEED="N/A"
+CURRENT_TREATMENT="N/A"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
+on_error() {
+  local status=$?
+  echo "current stage: ${CURRENT_STAGE}" >&2
+  echo "seed: ${CURRENT_SEED}" >&2
+  echo "treatment: ${CURRENT_TREATMENT}" >&2
+  echo "command: ${BASH_COMMAND}" >&2
+  echo "error: exit status ${status}" >&2
+  echo "log path: ${RESULT_ROOT}/terminal.log" >&2
+  echo "output path: ${RESULT_ROOT}" >&2
+  exit "${status}"
+}
+trap on_error ERR
 [ -x "${PYTHON}" ] || fail "required Python is not executable: ${PYTHON}"
 [ "${PYTHON}" = "${REQUIRED_PYTHON}" ] || fail "Python override forbidden; required: ${REQUIRED_PYTHON}; got: ${PYTHON}"
 PYTHON_EXECUTABLE="$("${PYTHON}" -c 'import sys; print(sys.executable)')"
@@ -42,7 +57,7 @@ if [ "${RESUME}" -eq 1 ]; then
 fi
 mkdir -p "${RESULT_ROOT}"/{raw,logs,runs,results,summary,configs}
 exec > >(tee -a "${RESULT_ROOT}/terminal.log") 2>&1
-echo "K5 FINAL ACTUATOR GKE: S0 vs S5-C6 only; seeds 42--46; factor 2.0"
+echo "K5 FINAL ACTUATOR GKE: S0 vs S5 only; seeds 42--46; factor 2.0"
 echo "Python: ${PYTHON_EXECUTABLE}"
 echo "Python version: $("${PYTHON}" --version 2>&1)"
 echo "Python prefix: ${PYTHON_PREFIX}"
@@ -67,8 +82,11 @@ restore_topology() { cp "${TOPOLOGY_BACKUP}" helm/ahbn/topology.json; }
 trap restore_topology EXIT
 
 for seed in 42 43 44 45 46; do
-  if [ $((seed % 2)) -eq 0 ]; then treatments=(S0 S5-C6); else treatments=(S5-C6 S0); fi
+  if [ $((seed % 2)) -eq 0 ]; then treatments=(S0 S5); else treatments=(S5 S0); fi
   for treatment in "${treatments[@]}"; do
+    CURRENT_STAGE="paired GKE run"
+    CURRENT_SEED="${seed}"
+    CURRENT_TREATMENT="${treatment}"
     config="${RESULT_ROOT}/configs/seed${seed}_${treatment}.yaml"
     run_dir="${RESULT_ROOT}/runs/seed${seed}/${treatment}"
     if [ -d "${run_dir}" ]; then
@@ -93,9 +111,13 @@ for seed in 42 43 44 45 46; do
   done
 done
 
+CURRENT_STAGE="analysis and postflight"
+CURRENT_SEED="N/A"
+CURRENT_TREATMENT="N/A"
 "${PYTHON}" scripts/k5_final_actuator_analysis.py analyze --root "${RESULT_ROOT}"
 check_hashes | tee "${RESULT_ROOT}/canonical_hashes_after.txt"
 cmp "${RESULT_ROOT}/canonical_hashes_before.txt" "${RESULT_ROOT}/canonical_hashes_after.txt" || fail "canonical hash records differ"
 trap - EXIT
 restore_topology
+trap - ERR
 echo "K5 final actuator GKE complete: ${RESULT_ROOT}"
