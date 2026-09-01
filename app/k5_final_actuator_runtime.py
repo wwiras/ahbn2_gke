@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-import random
 
 import peer
 from k5_final_actuator_policy import TREATMENTS, requested_fanout
@@ -53,7 +52,9 @@ def target_peers(self, sender_id: int, message_id: str | None = None) -> list[in
             if getattr(self, "h2_selector_treatment", "selector_control") == "seeded_uniform":
                 targets = self.h2_seeded_uniform_selection(eligible, budget, message_id)
             else:
-                targets = random.sample(eligible, k)
+                # PeerState owns a topology-seeded RNG. Keep uniform selection
+                # while ensuring the frozen Exp08 seed reaches this component.
+                targets = self.rng.sample(eligible, k)
         else:
             targets = []
         targets = list(dict.fromkeys(targets))

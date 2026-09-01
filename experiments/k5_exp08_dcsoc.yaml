@@ -10,3 +10,4 @@ failure: {mode: bottleneck, triggerTime: 0.5, overloadDelayMs: 700}
 workload: {messageCount: 20, messageInterval: 0.4}
 bottleneck: {enabled: true, target: important_peer, delayMs: 700}
 k5: {algorithm: dcsoc, seed: 42, overload_factor: 1.0, overload_delay_ms: 700}
+k5_h2: {seed: 42, treatment: selector_control, actuator_treatment: S5}

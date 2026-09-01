@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="${PYTHON:-/Users/wwiras/Documents/src/AHBN_GKEProj/venv_ahbn2/bin/python}"
@@ -25,16 +25,22 @@ if [ "${MODE}" != "formal" ] && [ "${MODE}" != "smoke" ]; then
   exit 1
 fi
 mkdir -p "${RUNS_DIR}" "${CONFIG_DIR}"
+exec > >(tee -a "${K5_ROOT}/terminal.log") 2>&1
+echo "COMMAND: IMAGE=${IMAGE} $0 ${MODE}"
 printf '%s\n' "${K5_ROOT}" >"${K5_ROOT}/result_root.txt"
 printf '%s\n' "${IMAGE}" >"${K5_ROOT}/image.txt"
+date -u +%Y-%m-%dT%H:%M:%SZ >"${K5_ROOT}/start_time_utc.txt"
+git rev-parse HEAD >"${K5_ROOT}/git_commit.txt"
+"${PYTHON}" --version >"${K5_ROOT}/python_version.txt" 2>&1
 
 algorithms=(gossip structured dcsoc ahbn)
 seeds=(42 43 44 45 46)
 factors=(1.0 1.5 2.0 3.0)
 if [ "${MODE}" = "smoke" ]; then
   seeds=(42)
-  factors=(1.0)
+  factors=(1.0 3.0)
 fi
+echo "MATRIX: algorithms=${algorithms[*]} seeds=${seeds[*]} factors=${factors[*]} expected_runs=$((${#algorithms[@]} * ${#seeds[@]} * ${#factors[@]}))"
 
 collect_statuses() {
   local run_dir="$1"
@@ -86,8 +92,7 @@ for algorithm in "${algorithms[@]}"; do
   echo "=== K5 stage ${algorithm}: ${completed}/${#seeds[@]}x${#factors[@]} PASS ==="
 done
 
-if [ "${MODE}" = "formal" ]; then
-  "${PYTHON}" "${ROOT_DIR}/app/k5_exp08_tools.py" aggregate "${K5_ROOT}"
-fi
+"${PYTHON}" "${ROOT_DIR}/app/k5_exp08_tools.py" aggregate "${K5_ROOT}" --mode "${MODE}"
+date -u +%Y-%m-%dT%H:%M:%SZ >"${K5_ROOT}/end_time_utc.txt"
 
 echo "K5 ${MODE} execution complete: ${K5_ROOT}"

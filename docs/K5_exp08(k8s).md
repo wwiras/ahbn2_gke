@@ -1,3 +1,69 @@
+# K5 Exp08(K8s) — Final Actuator Restart
+
+## Source Snapshot
+
+31-Aug-2026 frozen AHBN (`ahbn2_gke_31Aug2026(1).zip` lineage), audited at git commit `7927e647101c22f991b24cfd8a8fe2af10818417` before restart edits.
+
+## Authoritative Actuator Files
+
+The accepted production treatment is S5 from `app/k5_final_actuator_policy.py`, invoked only through `app/k5_final_actuator_runtime.py`. Its frozen requested fanout is: z <= -0.25 -> 2; -0.25 < z < 0.25 -> 3; 0.25 <= z < 0.90 -> 4; 0.90 <= z < 1.50 -> 5; z >= 1.50 -> 6. `tests/test_k5_final_actuator_gke.py`, `scripts/run_k5_final_actuator_gke.sh`, `scripts/k5_final_actuator_analysis.py`, and `docs/K5_GKES0vsS5f2tof6.md` retain the acceptance evidence.
+
+## Canonical Integrity
+
+The controller remains `z = -d_hat + l_hat + u_hat + c_hat`, with alpha 0.3, sigmoid weight, mode `gossip` at weight >= 0.5 and `cluster` otherwise. `app/ahbn_controller.py` and `app/peer.py` were not edited by this restart; pre-edit SHA-256 values were respectively `dee8cb8e81494bc1448793076803a330602d613e9654ac7fa572d8203f6cc7c8` and `64c529f9c32f732c8d4f2c5959c75c0bbed20252328b81b018eb35c6cef10b5a`.
+
+## Resolved Experiment Matrix
+
+The repository represents repetition through five deterministic seeds, not a separate repetition loop: four algorithms x four delays (700, 1050, 1400, 2100 ms) x seeds 42--46 = **80 formal executions**. Topology is BA(N=20,m=2), source peer-0, comparator order Gossip, Structured, DC-SoC, AHBN. Smoke is eight executions: all four algorithms x seed 42 x 700/2100 ms.
+
+## Docker Image
+
+A rebuild is required because peer-container source and its entrypoint contract changed. Manual command: `scripts/build_push_k5_exp08_final_actuator_image.sh`. Default new tag: `wwiras/ahbn2-peer:k5-exp08-final-s5-20260901`. Codex does not execute this script.
+
+## Local Validation
+
+Pending command capture from the mandated interpreter. No GKE execution is part of local validation.
+
+## Smoke Command
+
+`IMAGE=wwiras/ahbn2-peer:k5-exp08-final-s5-20260901 scripts/run_k5_exp08_smoke.sh`
+
+## Smoke Terminal Output
+
+[pending manual execution]
+
+## Smoke Result
+
+[pending]
+
+## Formal Command
+
+Only after smoke PASS: `IMAGE=wwiras/ahbn2-peer:k5-exp08-final-s5-20260901 scripts/run_k5_exp08_formal.sh --smoke-report outputs/k5_exp08_smoke-<timestamp>/terminal.log`
+
+## Formal Terminal Output
+
+[pending manual execution]
+
+## Formal Results
+
+[pending]
+
+## Statistical Validation
+
+[pending]
+
+## Scientific Interpretation
+
+[pending]
+
+## Final K5 Gate
+
+[pending]
+
+---
+
+# Historical Exp08 record (pre-restart)
+
 # K5 — Exp08(K8s): CH Overload
 
 ## Execution metadata
@@ -746,4 +812,3 @@ B. canonical design / implementation mismatch -> correct before formal K5, run r
 ```
 
 The investigation must first use existing evidence. It must not tune AHBN simply to improve the observed K5 delivery result.
-

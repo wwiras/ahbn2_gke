@@ -32,10 +32,14 @@ collect_debug() {
   kubectl -n "${NAMESPACE}" get pods -l app=ahbn-peer -o json > "${OUTDIR}/pods.json" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" get statefulset peer > "${OUTDIR}/statefulset.txt" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" describe statefulset peer > "${OUTDIR}/statefulset_describe.txt" 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" describe pods -l app=ahbn-peer > "${OUTDIR}/pods_describe.txt" 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" get events --sort-by=.metadata.creationTimestamp > "${OUTDIR}/events.txt" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" logs job/ahbn-controller > "${OUTDIR}/controller.log" 2>/dev/null || true
 
   kubectl -n "${NAMESPACE}" logs -l app=ahbn-peer --all-containers=true \
     --max-log-requests=20 --tail=-1 > "${OUTDIR}/logs.jsonl" 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" logs -l app=ahbn-peer --all-containers=true --previous \
+    --max-log-requests=20 --tail=-1 > "${OUTDIR}/logs_previous.txt" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" logs job/ahbn-controller >> "${OUTDIR}/logs.jsonl" 2>/dev/null || true
 }
 
