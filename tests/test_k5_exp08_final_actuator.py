@@ -91,6 +91,25 @@ def test_exp08_runner_uses_final_actuator_image_contract():
     assert "k5-exp08-final-s5-20260902-tracefix-amd64" in build
 
 
+def test_formal_guard_matrix_and_gate_contract():
+    root = Path(__file__).parents[1]
+    formal = (root / "scripts" / "run_k5_exp08_formal.sh").read_text()
+    runner = (root / "scripts" / "run_k5_exp08.sh").read_text()
+    analysis = (root / "app" / "k5_exp08_tools.py").read_text()
+    assert 'grep -Fxq "K5 EXP08 SMOKE GATE: PASS"' in formal
+    assert "formal IMAGE differs from smoke-validated image" in formal
+    assert "algorithms=(gossip structured dcsoc ahbn)" in runner
+    assert "seeds=(42 43 44 45 46)" in runner
+    assert "factors=(1.0 1.5 2.0 3.0)" in runner
+    assert "K5 EXP08 FORMAL GATE: PASS" in analysis
+    assert "EXPECTED FORMAL EXECUTIONS:" in analysis
+    assert "CONTROLLER INVARIANT MISMATCHES:" in analysis
+    assert "formal output directory already exists" in formal
+    assert "EXPECTED_CONTROLLER_HASH" in runner
+    assert "EXPECTED_POLICY_HASH" in runner
+    assert "image_provenance.json" in analysis
+
+
 def test_latency_overload_has_no_failure_or_maintenance_action():
     root = Path(__file__).parents[1]
     for algorithm in ALGORITHMS:

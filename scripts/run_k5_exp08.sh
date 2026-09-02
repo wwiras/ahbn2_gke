@@ -31,7 +31,16 @@ printf '%s\n' "${K5_ROOT}" >"${K5_ROOT}/result_root.txt"
 printf '%s\n' "${IMAGE}" >"${K5_ROOT}/image.txt"
 date -u +%Y-%m-%dT%H:%M:%SZ >"${K5_ROOT}/start_time_utc.txt"
 git rev-parse HEAD >"${K5_ROOT}/git_commit.txt"
+git status --short >"${K5_ROOT}/git_status.txt"
+shasum -a 256 app/ahbn_controller.py app/peer.py >"${K5_ROOT}/canonical_hashes.txt"
+shasum -a 256 app/k5_final_actuator_policy.py app/k5_final_actuator_runtime.py >"${K5_ROOT}/final_actuator_hashes.txt"
 "${PYTHON}" --version >"${K5_ROOT}/python_version.txt" 2>&1
+EXPECTED_CONTROLLER_HASH="dee8cb8e81494bc1448793076803a330602d613e9654ac7fa572d8203f6cc7c8"
+EXPECTED_PEER_HASH="64c529f9c32f732c8d4f2c5959c75c0bbed20252328b81b018eb35c6cef10b5a"
+EXPECTED_POLICY_HASH="8c7a0658cd226d0349e3ed3c64c943887196fdee57d9ef06874fd8525b683cff"
+[ "$(shasum -a 256 app/ahbn_controller.py | awk '{print $1}')" = "${EXPECTED_CONTROLLER_HASH}" ] || { echo "ERROR: canonical controller hash mismatch" >&2; exit 1; }
+[ "$(shasum -a 256 app/peer.py | awk '{print $1}')" = "${EXPECTED_PEER_HASH}" ] || { echo "ERROR: canonical peer hash mismatch" >&2; exit 1; }
+[ "$(shasum -a 256 app/k5_final_actuator_policy.py | awk '{print $1}')" = "${EXPECTED_POLICY_HASH}" ] || { echo "ERROR: final actuator policy hash mismatch" >&2; exit 1; }
 
 algorithms=(gossip structured dcsoc ahbn)
 seeds=(42 43 44 45 46)

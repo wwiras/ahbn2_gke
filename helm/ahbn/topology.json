@@ -1,8 +1,8 @@
 {
-  "run_id": "k5_ahbn_seed42_factor1.0",
-  "experiment": "k5_ahbn_seed42_factor1.0",
+  "run_id": "k5_ahbn_seed46_factor3.0",
+  "experiment": "k5_ahbn_seed46_factor3.0",
   "mode": "bottleneck",
-  "seed": 42,
+  "seed": 46,
   "strategy": "ahbn",
   "num_nodes": 20,
   "topology_type": "ba",
@@ -22,7 +22,7 @@
   "failure": {
     "mode": "bottleneck",
     "trigger_time": 0.5,
-    "overload_delay_ms": 700,
+    "overload_delay_ms": 2100,
     "num_events": 3,
     "interval_sec": 1.0,
     "target_type": "mixed"
@@ -30,7 +30,7 @@
   "bottleneck": {
     "enabled": true,
     "target": "important_peer",
-    "delay_ms": 700
+    "delay_ms": 2100
   },
   "workload": {
     "message_count": 20,
@@ -38,12 +38,12 @@
   },
   "k5": {
     "algorithm": "ahbn",
-    "seed": 42,
-    "overload_factor": 1.0,
-    "overload_delay_ms": 700
+    "seed": 46,
+    "overload_factor": 3.0,
+    "overload_delay_ms": 2100
   },
   "k5_h2": {
-    "seed": 42,
+    "seed": 46,
     "treatment": "selector_control",
     "actuator_treatment": "S5"
   },
@@ -59,14 +59,13 @@
         1,
         2,
         3,
+        4,
         5,
+        6,
         7,
+        8,
         9,
-        10,
-        11,
-        13,
         14,
-        17,
         18,
         19
       ],
@@ -86,13 +85,9 @@
     "1": {
       "neighbors": [
         0,
-        3,
-        4,
         6,
-        7,
         8,
-        15,
-        17
+        11
       ],
       "cluster_id": 0,
       "is_cluster_head": false,
@@ -108,8 +103,13 @@
     "2": {
       "neighbors": [
         0,
+        3,
         4,
-        16
+        9,
+        10,
+        12,
+        13,
+        14
       ],
       "cluster_id": 0,
       "is_cluster_head": false,
@@ -125,8 +125,8 @@
     "3": {
       "neighbors": [
         0,
-        1,
-        8
+        2,
+        17
       ],
       "cluster_id": 0,
       "is_cluster_head": false,
@@ -141,16 +141,11 @@
     },
     "4": {
       "neighbors": [
-        1,
+        0,
         2,
         5,
-        6,
-        12,
-        13,
-        15,
-        16,
-        18,
-        19
+        7,
+        10
       ],
       "cluster_id": 0,
       "is_cluster_head": false,
@@ -166,9 +161,7 @@
     "5": {
       "neighbors": [
         0,
-        4,
-        11,
-        12
+        4
       ],
       "cluster_id": 1,
       "is_cluster_head": true,
@@ -186,9 +179,8 @@
     },
     "6": {
       "neighbors": [
-        1,
-        4,
-        9
+        0,
+        1
       ],
       "cluster_id": 1,
       "is_cluster_head": false,
@@ -204,7 +196,8 @@
     "7": {
       "neighbors": [
         0,
-        1
+        4,
+        12
       ],
       "cluster_id": 1,
       "is_cluster_head": false,
@@ -219,10 +212,9 @@
     },
     "8": {
       "neighbors": [
+        0,
         1,
-        3,
-        10,
-        14
+        17
       ],
       "cluster_id": 1,
       "is_cluster_head": false,
@@ -238,7 +230,10 @@
     "9": {
       "neighbors": [
         0,
-        6
+        2,
+        11,
+        13,
+        15
       ],
       "cluster_id": 1,
       "is_cluster_head": false,
@@ -253,8 +248,10 @@
     },
     "10": {
       "neighbors": [
-        0,
-        8
+        2,
+        4,
+        16,
+        19
       ],
       "cluster_id": 2,
       "is_cluster_head": true,
@@ -272,8 +269,9 @@
     },
     "11": {
       "neighbors": [
-        0,
-        5
+        1,
+        9,
+        16
       ],
       "cluster_id": 2,
       "is_cluster_head": false,
@@ -288,8 +286,9 @@
     },
     "12": {
       "neighbors": [
-        4,
-        5
+        2,
+        7,
+        18
       ],
       "cluster_id": 2,
       "is_cluster_head": false,
@@ -304,8 +303,9 @@
     },
     "13": {
       "neighbors": [
-        0,
-        4
+        2,
+        9,
+        15
       ],
       "cluster_id": 2,
       "is_cluster_head": false,
@@ -321,7 +321,7 @@
     "14": {
       "neighbors": [
         0,
-        8
+        2
       ],
       "cluster_id": 2,
       "is_cluster_head": false,
@@ -336,8 +336,8 @@
     },
     "15": {
       "neighbors": [
-        1,
-        4
+        9,
+        13
       ],
       "cluster_id": 3,
       "is_cluster_head": true,
@@ -354,8 +354,8 @@
     },
     "16": {
       "neighbors": [
-        2,
-        4
+        10,
+        11
       ],
       "cluster_id": 3,
       "is_cluster_head": false,
@@ -370,8 +370,8 @@
     },
     "17": {
       "neighbors": [
-        0,
-        1
+        3,
+        8
       ],
       "cluster_id": 3,
       "is_cluster_head": false,
@@ -387,7 +387,7 @@
     "18": {
       "neighbors": [
         0,
-        4
+        12
       ],
       "cluster_id": 3,
       "is_cluster_head": false,
@@ -403,7 +403,7 @@
     "19": {
       "neighbors": [
         0,
-        4
+        10
       ],
       "cluster_id": 3,
       "is_cluster_head": false,

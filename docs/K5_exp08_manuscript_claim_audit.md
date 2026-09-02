@@ -1,0 +1,15 @@
+# K5 Exp08 Manuscript Claim Audit
+
+The manuscript is framing guidance; the frozen 2026 K5 dataset is authoritative for Exp08. The main manuscript was not edited.
+
+| Manuscript claim | Old value/wording | New frozen K5 evidence | Status | Recommended wording |
+|---|---|---|---|---|
+| AHBN maintains propagation performance under bottleneck | “maintaining propagation performance” | AHBN delivery means are 0.6435–0.6815; all three comparators are 1.0 in 20/20 runs each. | REVISE | AHBN reduces dissemination cost and often delay, while sacrificing reachability under bounded adaptive fanout. |
+| AHBN consistently occupies a balanced operating point | “consistently” / “balanced” | Traffic savings are robust, but delivery is uniformly lower and trajectories are non-monotonic. | QUALIFY | AHBN occupies a bounded adaptive trade-off point in Exp08; whether that balance is acceptable depends on reachability requirements. |
+| Duplicate reduction up to 62.2% | 62.2% | Frozen condition-specific AHBN-vs-Gossip reductions are recorded in `/Users/wwiras/Documents/src/AHBN_GKEProj/ahbn2_gke/outputs/k5_exp08_formal-20260902_092321/final_analysis/tables/tradeoff_diagnostics.csv` and differ from the old value. Structured/DC-SoC have zero duplicates. | REVISE | Report the new condition-specific values and name Gossip as the baseline; do not generalize to all comparators. |
+| AHBN limits delay increase to 8.6% | 8.6% | Frozen AHBN mean delay rises from 0.4037s to 1.3385s and is non-monotonic by seed. | REMOVE | Replace with absolute means/95% CIs and comparator-specific deltas from frozen K5. |
+| Structured delay rises 134% | 134% | The frozen Structured condition means are in `/Users/wwiras/Documents/src/AHBN_GKEProj/ahbn2_gke/outputs/k5_exp08_formal-20260902_092321/final_analysis/tables/comparator_propagation_delay.csv`; the old percentage is not the authoritative K5 value. | REVISE | Recalculate explicitly from frozen means and state the endpoints. |
+| Kubernetes validation confirms robustness | broad robustness claim | Implementation and mechanism are robustly evidenced, but AHBN reaches fewer nodes than comparators in every run. | QUALIFY | Kubernetes validation confirms executable adaptation and a stable traffic-saving direction, while revealing a reachability limitation. |
+| Gossip gains reachability through redundancy | qualitative | Gossip delivery is 1.0 in 20/20 runs with 680 duplicates/run. | RETAIN | Gossip preserves full delivery in this campaign at the highest duplicate cost. |
+| Structured methods are bottleneck-sensitive | qualitative | Structured remains at full delivery and 0 duplicates but delay grows with overload. | RETAIN | Structured retains delivery and zero duplicate count here, with overload-sensitive delay. |
+| AHBN uses local observation-driven adaptation | qualitative | Canonical traces and S5 actions are present with zero invariant mismatch. | RETAIN | AHBN adapts bounded requested fanout from locally derived z; eligible topology constrains realized action. |

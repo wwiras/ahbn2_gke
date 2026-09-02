@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import statistics
 from collections import Counter
 from pathlib import Path
@@ -191,18 +192,43 @@ def aggregate(root: Path, mode: str = "formal") -> None:
     import matplotlib.pyplot as plt
     import pandas as pd
 
-    metrics = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(root.glob("runs/*/metrics.json"))]
+    metric_paths = sorted(root.glob("runs/*/metrics.json"))
+    metrics = [json.loads(p.read_text(encoding="utf-8")) for p in metric_paths]
     expected_factors = FACTORS if mode == "formal" else (1.0, 3.0)
     expected_seeds = SEEDS if mode == "formal" else (42,)
     expected_count = len(ALGORITHMS) * len(expected_factors) * len(expected_seeds)
-    if len(metrics) != expected_count or len({x["run_id"] for x in metrics}) != expected_count:
-        raise SystemExit(f"{mode} run reconciliation FAIL: rows={len(metrics)}, unique={len({x['run_id'] for x in metrics})}")
-    raw = pd.DataFrame(metrics).sort_values(["algorithm", "seed", "overload_factor"])
     expected = {(a, s, f) for a in ALGORITHMS for s in expected_seeds for f in expected_factors}
-    actual = {(r.algorithm, int(r.seed), float(r.overload_factor)) for r in raw.itertuples()}
-    if actual != expected:
-        raise SystemExit("formal coordinate set mismatch")
+    coordinates = [(x["algorithm"], int(x["seed"]), float(x["overload_factor"])) for x in metrics]
+    coordinate_counts = Counter(coordinates)
+    actual = set(coordinates)
+    missing = sorted(expected - actual)
+    unexpected = sorted(actual - expected)
+    duplicates = sorted(coord for coord, count in coordinate_counts.items() if count > 1)
+    completeness = {"mode": mode, "expected_executions": expected_count,
+                    "actual_rows": len(metrics), "unique_run_ids": len({x["run_id"] for x in metrics}),
+                    "unique_coordinates": len(actual), "missing_coordinates": missing,
+                    "unexpected_coordinates": unexpected, "duplicate_coordinates": duplicates}
+    (root / "dataset_completeness.json").write_text(json.dumps(completeness, indent=2) + "\n", encoding="utf-8")
+    pd.DataFrame(missing, columns=["algorithm", "seed", "overload_factor"]).to_csv(root / "missing_coordinates.csv", index=False)
+    pd.DataFrame(duplicates, columns=["algorithm", "seed", "overload_factor"]).to_csv(root / "duplicate_coordinates.csv", index=False)
+    if (len(metrics) != expected_count or len({x["run_id"] for x in metrics}) != expected_count
+            or missing or unexpected or duplicates):
+        raise SystemExit(f"{mode} run reconciliation FAIL: {completeness}")
+    raw = pd.DataFrame(metrics).sort_values(["algorithm", "seed", "overload_factor"])
     raw.to_csv(root / "k5_raw_results.csv", index=False)
+    image_tags = set()
+    image_ids = set()
+    for pods_path in root.glob("runs/*/pods.json"):
+        pods = json.loads(pods_path.read_text(encoding="utf-8")).get("items", [])
+        for pod in pods:
+            image_tags.update(container.get("image") for container in pod.get("spec", {}).get("containers", []) if container.get("image"))
+            image_ids.update(state.get("imageID") for state in pod.get("status", {}).get("containerStatuses", []) if state.get("imageID"))
+    image_provenance = {"image_tags": sorted(image_tags), "image_ids": sorted(image_ids),
+                        "single_image_tag": len(image_tags) == 1,
+                        "single_image_digest": len(image_ids) == 1}
+    (root / "image_provenance.json").write_text(json.dumps(image_provenance, indent=2) + "\n", encoding="utf-8")
+    if not image_provenance["single_image_tag"] or not image_provenance["single_image_digest"]:
+        raise SystemExit(f"image provenance mismatch: {image_provenance}")
     summary = []
     for (algorithm, factor), group in raw.groupby(["algorithm", "overload_factor"], sort=False):
         for metric in ("delivery_ratio", "propagation_delay", "duplicates", "total_forwards"):
@@ -221,9 +247,12 @@ def aggregate(root: Path, mode: str = "formal") -> None:
     expected_groups = len(ALGORITHMS) * len(expected_factors)
     if len(agg.groupby(["algorithm", "overload_factor"])) != expected_groups:
         raise SystemExit("aggregate group integrity FAIL")
-    plot_dir = root / "plots"; plot_dir.mkdir(exist_ok=True)
+    skip_plots = os.environ.get("K5_SKIP_PLOTS") == "1"
+    plot_dir = root / "plots"
+    if not skip_plots:
+        plot_dir.mkdir(exist_ok=True)
     labels = {"gossip": "Gossip", "structured": "Structured", "dcsoc": "DC-SoC", "ahbn": "AHBN"}
-    for metric in ("delivery_ratio", "propagation_delay", "duplicates", "total_forwards"):
+    for metric in (() if skip_plots else ("delivery_ratio", "propagation_delay", "duplicates", "total_forwards")):
         fig, ax = plt.subplots(figsize=(7, 4.5))
         for algorithm in ALGORITHMS:
             data = agg[(agg.algorithm == algorithm) & (agg.metric == metric)].sort_values("overload_factor")
@@ -237,7 +266,7 @@ def aggregate(root: Path, mode: str = "formal") -> None:
             if row.get("event") == "ahbn_controller_trace":
                 traces.append({**{k: json.loads((run / "topology.json").read_text())["k5"][k] for k in ("seed", "overload_factor")}, **row})
     pd.DataFrame(traces).to_csv(root / "k5_ahbn_traces.csv", index=False)
-    if traces:
+    if traces and not skip_plots:
         td = pd.DataFrame(traces)
         fig, axes = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
         for factor, data in td[td.seed == 42].groupby("overload_factor"):
@@ -259,6 +288,57 @@ def aggregate(root: Path, mode: str = "formal") -> None:
                              for value, count in sorted(counts.items(), key=lambda item: str(item[0])))
     if adaptive_rows:
         pd.DataFrame(adaptive_rows).to_csv(root / "k5_ahbn_adaptive_summary.csv", index=False)
+    controller_summary = []
+    if traces:
+        td = pd.DataFrame(traces)
+        for factor, group in td.groupby("overload_factor"):
+            for field in ("d_hat", "l_hat", "u_hat", "c_hat", "score", "weight"):
+                values = group[field].astype(float)
+                controller_summary.append({"overload_factor": factor,
+                                           "overload_delay_ms": DELAYS[float(factor)],
+                                           "field": "z" if field == "score" else field,
+                                           "n": len(values), "mean": values.mean(),
+                                           "standard_deviation": values.std(ddof=1),
+                                           "minimum": values.min(), "p25": values.quantile(0.25),
+                                           "median": values.median(), "p75": values.quantile(0.75),
+                                           "maximum": values.max()})
+    pd.DataFrame(controller_summary).to_csv(root / "k5_ahbn_controller_distribution.csv", index=False)
+    actuator_by_condition = []
+    for run in sorted(root.glob("runs/k5_ahbn_*")):
+        topo = json.loads((run / "topology.json").read_text(encoding="utf-8"))
+        factor = float(topo["k5"]["overload_factor"])
+        run_decisions = [row for row in load_jsonl(run / "logs.jsonl")
+                         if row.get("event") == "k5_final_actuator_decision"]
+        for row in run_decisions:
+            requested = int(row["requested_fanout"]); actual_count = int(row["actual_fanout"])
+            eligible = int(row["eligible_neighbor_count"])
+            actuator_by_condition.append({"seed": topo["k5"]["seed"],
+                                          "overload_factor": factor,
+                                          "overload_delay_ms": DELAYS[factor],
+                                          "mode": row["mode"], "z": row["score"],
+                                          "requested_fanout": requested,
+                                          "actual_fanout": actual_count,
+                                          "eligible_neighbors": eligible,
+                                          "eligible_clipping": eligible < requested,
+                                          "realized_clipping": actual_count < requested})
+    action_frame = pd.DataFrame(actuator_by_condition)
+    action_frame.to_csv(root / "k5_ahbn_actuator_decisions.csv", index=False)
+    action_summary = []
+    if not action_frame.empty:
+        for factor, group in action_frame.groupby("overload_factor"):
+            for dimension in ("mode", "requested_fanout", "actual_fanout", "eligible_neighbors"):
+                counts = group[dimension].value_counts(dropna=False)
+                action_summary.extend({"overload_factor": factor,
+                                       "overload_delay_ms": DELAYS[float(factor)],
+                                       "dimension": dimension, "value": value,
+                                       "count": count, "share": count / len(group)}
+                                      for value, count in counts.items())
+            action_summary.append({"overload_factor": factor,
+                                   "overload_delay_ms": DELAYS[float(factor)],
+                                   "dimension": "eligible_clipping", "value": True,
+                                   "count": int(group["eligible_clipping"].sum()),
+                                   "share": float(group["eligible_clipping"].mean())})
+        pd.DataFrame(action_summary).to_csv(root / "k5_ahbn_actuator_by_condition.csv", index=False)
     raw.groupby(["algorithm", "seed"], as_index=False)[
         ["delivery_ratio", "propagation_delay", "duplicates", "total_forwards"]
     ].mean().to_csv(root / "k5_per_seed_results.csv", index=False)
@@ -275,17 +355,30 @@ def aggregate(root: Path, mode: str = "formal") -> None:
             dominance.append({"metric": metric, "leave_one_seed_out_order_changes": changes,
                               "one_seed_can_change_order": bool(changes)})
         pd.DataFrame(dominance).to_csv(root / "k5_seed_dominance.csv", index=False)
+    controller_mismatches = int(raw["controller_invariant_mismatches"].sum())
+    actuator_mismatches = int(raw["actuator_invariant_mismatches"].sum())
     validation = {"implementation_integrity": "PASS", "dataset_complete": "YES",
                   "dcsoc_slow_not_failed": "PASS", "canonical_ahbn_unchanged": "PASS",
                   "final_actuator": "PASS", "result_direction": "MIXED",
-                  "expected_runs": expected_count}
+                  "expected_runs": expected_count, "actual_runs": len(raw),
+                  "controller_invariant_mismatches": controller_mismatches,
+                  "actuator_invariant_mismatches": actuator_mismatches,
+                  "formal_gate": "PASS" if mode == "formal" else None}
     (root / "validation_report.json").write_text(json.dumps(validation, indent=2) + "\n", encoding="utf-8")
-    print("K5 EXP08 SMOKE GATE: PASS" if mode == "smoke" else "IMPLEMENTATION INTEGRITY: PASS")
+    if mode == "smoke":
+        print("K5 EXP08 SMOKE GATE: PASS")
+    print("IMPLEMENTATION INTEGRITY: PASS")
     print("DATASET COMPLETE: YES")
+    print(f"EXPECTED FORMAL EXECUTIONS: {80 if mode == 'formal' else expected_count}")
+    print(f"ACTUAL FORMAL EXECUTIONS: {len(raw)}")
     print("DC-SOC SLOW!=FAILED: PASS")
     print("CANONICAL AHBN UNCHANGED: PASS")
     print("FINAL ACTUATOR: PASS")
+    print(f"CONTROLLER INVARIANT MISMATCHES: {controller_mismatches}")
+    print(f"ACTUATOR INVARIANT MISMATCHES: {actuator_mismatches}")
     print("RESULT DIRECTION: MIXED")
+    if mode == "formal":
+        print("K5 EXP08 FORMAL GATE: PASS")
     print(f"raw_rows={len(raw)} unique_runs={raw.run_id.nunique()} aggregate_groups={expected_groups}")
 
 
