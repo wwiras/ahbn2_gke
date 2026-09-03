@@ -1,0 +1,23 @@
+experiment: k7_exp11_base
+strategy: gossip
+numNodes: 20
+numClusters: 4
+messageSource: 0
+settleTime: 18.0
+topology: {type: ba, baM: 2, seed: 42}
+failure:
+  mode: churn
+  triggerTime: 1.0
+  numEvents: 4
+  intervalSec: 1.2
+  targetType: mixed
+workload: {messageCount: 80, messageInterval: 0.4}
+bottleneck: {enabled: false}
+k5_h2: {seed: 42, treatment: selector_control, actuator_treatment: S5}
+k7_exp11:
+  algorithm: gossip
+  seed: 42
+  schedule_semantics: fixed_offsets_fail_closed
+  plannedLeaveOffsetsSec: [1.0, 8.0, 15.0, 22.0]
+  recovery_definition: first_post_rejoin_opportunity_full_delivery_to_active_ready_peers
+  dcsoc_du_after_event: true
