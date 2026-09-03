@@ -538,7 +538,7 @@ def main():
             "min_samples": dcsoc_min_samples,
             "master_id": cluster_heads[0] if strategy == "dcsoc" else None,
             "structural_edges": structural_edges,
-            "dynamic_maintenance": False,
+            "dynamic_maintenance": bool(dcsoc_cfg.get("dynamic_maintenance", False)),
         },
 
         "settle_time": settle_time,
@@ -589,6 +589,10 @@ def main():
 
         # Experiment-only metadata consumed by the isolated H2 selector switch.
         "k5_h2": cfg.get("k5_h2", {}),
+
+        **({"k5_exp10": cfg["k5_exp10"]} if cfg.get("k5_exp10") else {}),
+
+        "k6_exp10": cfg.get("k6_exp10", {}),
 
         # -----------------------------------------------
         # AHBN parameters

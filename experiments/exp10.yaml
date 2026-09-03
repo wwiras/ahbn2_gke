@@ -1,24 +1,27 @@
-experiment: exp10
-strategy: ahbn
+experiment: k5_exp10_base
+strategy: gossip
 numNodes: 20
-fanout: 2
 numClusters: 4
-messageSource: 4
-settleTime: 8.0
+messageSource: 0
+settleTime: 18.0
 
 topology:
   type: ba
   baM: 2
-  edgeProb: 0.2
   seed: 42
 
 failure:
-  mode: ch_failure
-  target_peer: 5
-  triggerTime: 0.03
-  overloadDelayMs: 300
+  mode: exp10_pod_delete
+  triggerTime: 0.5
+  targetType: critical_peer
+
+workload: {messageCount: 20, messageInterval: 0.4}
+bottleneck: {enabled: false}
+k5_h2: {seed: 42, treatment: selector_control, actuator_treatment: S5}
+k5_exp10: {algorithm: gossip, seed: 42, failure: pod_delete, recovery_definition: survivor_full_delivery}
 
 
+# Legacy commented configurations below are historical and non-authoritative.
 # experiment: exp10
 # strategy: ahbn
 # numNodes: 20

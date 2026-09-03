@@ -145,6 +145,8 @@ class DCSOCMaintenance:
         node["dcsoc_children"] = []
         node["is_cluster_head"] = False
         replacement = None
+        surviving_candidate_set = []
+        replacement_degree = None
 
         if failed_role == "core":
             candidates = [
@@ -154,6 +156,7 @@ class DCSOCMaintenance:
                 and self.active[candidate]
                 and config.get("cluster_id") == cluster_id
             ]
+            surviving_candidate_set = sorted(candidates)
             if candidates:
                 replacement = max(
                     candidates,
@@ -162,6 +165,7 @@ class DCSOCMaintenance:
                     ),
                 )
                 repl = self.nodes[replacement]
+                replacement_degree = len(repl.get("neighbors", []))
                 repl["dcsoc_role"] = "core"
                 repl["is_cluster_head"] = True
                 repl["cluster_head_id"] = replacement
@@ -204,6 +208,8 @@ class DCSOCMaintenance:
             "affected_cluster": cluster_id,
             "former_parent": parent,
             "replacement_core": replacement,
+            "surviving_candidate_set": surviving_candidate_set,
+            "replacement_degree": replacement_degree,
         }
 
     def _rejoin(self, *, node_id: int, reason: str) -> dict:

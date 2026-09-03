@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY peer.proto .
+RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. peer.proto
+COPY peer.py ahbn_controller.py observations.py gen_topology.py dcsoc_maintenance.py k5_exp10_tools.py k6_exp10_tools.py plot_exp10.py plot_exp11.py k5_final_actuator_policy.py k5_final_actuator_runtime.py k6_final_actuator_policy.py k6_final_actuator_runtime.py ./
+COPY controller.py ./controller_shared.py
+COPY k6_controller.py ./controller.py
+ENV PYTHONUNBUFFERED=1
+EXPOSE 50051
+CMD ["python", "k6_final_actuator_runtime.py"]

@@ -12,6 +12,7 @@ from kubernetes.client.rest import ApiException
 
 import peer_pb2
 import peer_pb2_grpc
+from k5_exp10_tools import choose_exp10_target
 
 
 def now() -> float:
@@ -289,6 +290,73 @@ def delete_peer_pod(peer_id: int, ns: str) -> None:
         raise
 
 
+def delete_peer_pod_observed(peer_id: int, ns: str, timeout: float = 30.0) -> dict:
+    """Delete a pod and prove that the original pod instance became unavailable."""
+    config.load_incluster_config()
+    v1 = client.CoreV1Api()
+    pod_name = f"peer-{peer_id}"
+    original = v1.read_namespaced_pod(name=pod_name, namespace=ns)
+    original_uid = original.metadata.uid
+    requested_at = now()
+    v1.delete_namespaced_pod(name=pod_name, namespace=ns, grace_period_seconds=0)
+    log_event(event="pod_delete_requested", peer_id=peer_id, pod_name=pod_name,
+              original_pod_uid=original_uid, deletion_requested_at=requested_at)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            current = v1.read_namespaced_pod(name=pod_name, namespace=ns)
+            current_uid = current.metadata.uid
+            ready = any(
+                condition.type == "Ready" and condition.status == "True"
+                for condition in (current.status.conditions or [])
+            )
+            if current_uid != original_uid or not ready:
+                observed_at = now()
+                evidence = "replacement_uid" if current_uid != original_uid else "not_ready"
+                log_event(event="pod_unavailability_observed", peer_id=peer_id,
+                          pod_name=pod_name, original_pod_uid=original_uid,
+                          observed_pod_uid=current_uid, observed_ready=ready,
+                          evidence=evidence, unavailability_observed_at=observed_at)
+                return {"requested_at": requested_at, "observed_at": observed_at,
+                        "original_uid": original_uid, "observed_uid": current_uid,
+                        "evidence": evidence}
+        except ApiException as error:
+            if error.status == 404:
+                observed_at = now()
+                log_event(event="pod_unavailability_observed", peer_id=peer_id,
+                          pod_name=pod_name, original_pod_uid=original_uid,
+                          observed_pod_uid=None, observed_ready=False,
+                          evidence="not_found", unavailability_observed_at=observed_at)
+                return {"requested_at": requested_at, "observed_at": observed_at,
+                        "original_uid": original_uid, "observed_uid": None,
+                        "evidence": "not_found"}
+            raise
+        time.sleep(0.05)
+    raise RuntimeError(f"pod deletion was not observed for {pod_name} within {timeout}s")
+
+
+def run_exp10_failure(topo: dict, peer_svc: str, namespace: str, grpc_port: int) -> None:
+    failure = topo["failure"]
+    time.sleep(float(failure.get("trigger_time", 0.5)))
+    target = choose_exp10_target(topo)
+    log_event(event="failure_target_selected", run_id=topo["run_id"],
+              strategy=topo["strategy"], **target)
+    triggered_at = now()
+    log_event(event="failure_triggered", run_id=topo["run_id"],
+              strategy=topo["strategy"], failure_mode="pod_delete",
+              target_peer=target["peer_id"], target_role=target["role"],
+              target_cluster=target["cluster_id"], target_degree=target["degree"],
+              failure_triggered_at=triggered_at)
+    evidence = delete_peer_pod_observed(target["peer_id"], namespace)
+    if topo.get("strategy") == "dcsoc":
+        broadcast_dcsoc_maintenance(
+            topo, peer_svc, namespace, grpc_port, node_id=target["peer_id"],
+            available=False, reason="exp10_pod_delete",
+        )
+    log_event(event="failure_injection_complete", run_id=topo["run_id"],
+              target_peer=target["peer_id"], **evidence)
+
+
 def inject_messages(
     run_id: str,
     source_id: int,
@@ -297,19 +365,24 @@ def inject_messages(
     grpc_port: int,
     message_count: int,
     message_interval: float,
+    retry_unavailable_source: bool = False,
 ) -> None:
     for idx in range(message_count):
         message_id = f"m{idx + 1}"
 
-        with grpc.insecure_channel(peer_addr(source_id, peer_svc, namespace, grpc_port)) as channel:
-            stub = peer_pb2_grpc.PeerServiceStub(channel)
-            stub.StartRun(
-                peer_pb2.StartRequest(
-                    run_id=run_id,
-                    message_id=message_id,
-                ),
-                timeout=3,
-            )
+        deadline = time.monotonic() + 180.0
+        while True:
+            try:
+                with grpc.insecure_channel(peer_addr(source_id, peer_svc, namespace, grpc_port)) as channel:
+                    stub = peer_pb2_grpc.PeerServiceStub(channel)
+                    stub.StartRun(peer_pb2.StartRequest(run_id=run_id, message_id=message_id), timeout=3)
+                break
+            except Exception as error:
+                if not retry_unavailable_source or time.monotonic() >= deadline:
+                    raise
+                log_event(event="source_temporarily_unavailable", run_id=run_id,
+                          peer_id=source_id, message_id=message_id, error=str(error))
+                time.sleep(0.25)
 
         log_event(
             event="source_triggered",
@@ -570,6 +643,7 @@ def main() -> None:
         failure_mode=mode,
         message_count=message_count,
         message_interval=message_interval,
+        retry_unavailable_source=(mode == "exp10_pod_delete"),
     )
 
     wait_for_peers(num_nodes, peer_svc, namespace, grpc_port)
@@ -578,7 +652,15 @@ def main() -> None:
 
     stress_thread = None
 
-    if mode == "churn":
+    if mode == "exp10_pod_delete":
+        stress_thread = threading.Thread(
+            target=run_exp10_failure,
+            args=(topo, peer_svc, namespace, grpc_port),
+            daemon=True,
+        )
+        stress_thread.start()
+
+    elif mode == "churn":
         stress_thread = threading.Thread(
             target=run_churn,
             args=(topo, peer_svc, namespace, grpc_port),
@@ -616,12 +698,14 @@ def main() -> None:
         grpc_port=grpc_port,
         message_count=message_count,
         message_interval=message_interval,
+        retry_unavailable_source=(mode == "exp10_pod_delete"),
     )
 
     if mode in (
         "churn",
         "mixed_resources",
         "bottleneck",
+        "exp10_pod_delete",
     ):
         if stress_thread is not None:
             stress_thread.join()

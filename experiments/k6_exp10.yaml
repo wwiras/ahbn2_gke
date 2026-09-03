@@ -1,0 +1,12 @@
+experiment: k6_exp10_base
+strategy: gossip
+numNodes: 20
+numClusters: 4
+messageSource: 0
+settleTime: 18.0
+topology: {type: ba, baM: 2, seed: 42}
+failure: {mode: exp10_pod_delete, triggerTime: 0.5, targetType: critical_peer}
+workload: {messageCount: 20, messageInterval: 0.4}
+bottleneck: {enabled: false}
+k5_h2: {seed: 42, treatment: selector_control, actuator_treatment: S5}
+k6_exp10: {algorithm: gossip, seed: 42, failure: pod_delete, recovery_definition: survivor_full_delivery}

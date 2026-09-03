@@ -17,6 +17,8 @@ RELEASE="${RELEASE:-ahbn}"
 IMAGE="${IMAGE:-}"
 PYTHON="${PYTHON:-python}"
 POD_MANAGEMENT_POLICY="${POD_MANAGEMENT_POLICY:-OrderedReady}"
+CAPTURE_STREAM="${CAPTURE_STREAM:-0}"
+LOG_FOLLOW_PID=""
 
 mkdir -p "${OUTDIR}"
 
@@ -27,6 +29,11 @@ if [ -z "$IMAGE" ]; then
 fi
 
 collect_debug() {
+  if [ -n "${LOG_FOLLOW_PID}" ]; then
+    kill "${LOG_FOLLOW_PID}" 2>/dev/null || true
+    wait "${LOG_FOLLOW_PID}" 2>/dev/null || true
+    LOG_FOLLOW_PID=""
+  fi
   echo "[debug] Collecting diagnostics ..."
   kubectl -n "${NAMESPACE}" get pods -o wide > "${OUTDIR}/pods.txt" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" get pods -l app=ahbn-peer -o json > "${OUTDIR}/pods.json" 2>/dev/null || true
@@ -41,6 +48,10 @@ collect_debug() {
   kubectl -n "${NAMESPACE}" logs -l app=ahbn-peer --all-containers=true --previous \
     --max-log-requests=20 --tail=-1 > "${OUTDIR}/logs_previous.txt" 2>/dev/null || true
   kubectl -n "${NAMESPACE}" logs job/ahbn-controller >> "${OUTDIR}/logs.jsonl" 2>/dev/null || true
+  if [ "${CAPTURE_STREAM}" = "1" ] && [ -s "${OUTDIR}/peer_stream.jsonl" ]; then
+    mv "${OUTDIR}/logs.jsonl" "${OUTDIR}/final_snapshot.jsonl"
+    cat "${OUTDIR}/peer_stream.jsonl" "${OUTDIR}/final_snapshot.jsonl" >"${OUTDIR}/logs.jsonl"
+  fi
 }
 
 trap 'collect_debug' EXIT
@@ -98,6 +109,13 @@ kubectl -n "${NAMESPACE}" wait \
 
 echo "[7] Safety buffer before controller start"
 sleep 5
+
+if [ "${CAPTURE_STREAM}" = "1" ]; then
+  echo "[7b] Start peer log stream (preserves deleted-pod evidence)"
+  kubectl -n "${NAMESPACE}" logs -f -l app=ahbn-peer --all-containers=true \
+    --max-log-requests=20 --tail=-1 >"${OUTDIR}/peer_stream.jsonl" 2>"${OUTDIR}/peer_stream.err" &
+  LOG_FOLLOW_PID=$!
+fi
 
 echo "[8] Start controller job"
 helm upgrade "${RELEASE}" "${ROOT_DIR}/helm/ahbn" \
