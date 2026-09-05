@@ -9,6 +9,8 @@ ALGORITHMS = ("gossip", "structured", "dcsoc", "ahbn")
 STRATEGIES = {"gossip":"gossip", "structured":"cluster", "dcsoc":"dcsoc", "ahbn":"ahbn"}
 SEEDS = (42,43,44,45,46)
 PLANNED_LEAVE_OFFSETS_S = (1.0, 8.0, 15.0, 22.0)
+FEASIBILITY_LEAVE_OFFSETS_S = (1.0, 26.0, 51.0, 76.0)
+FEASIBILITY_MESSAGE_COUNT = 240
 
 def planned_wait_seconds(experiment_start: float, planned_offset: float,
                          current_time: float, previous_cycle_complete: bool) -> float:
@@ -41,12 +43,19 @@ def design(base: dict, seed: int) -> tuple[int,list[int]]:
             if len(targets)==4: return source,targets
     raise RuntimeError("fewer than four distinct non-source churn targets")
 
-def write_config(base_path: Path,out: Path,algorithm: str,seed: int) -> None:
+def write_config(base_path: Path,out: Path,algorithm: str,seed: int,
+                 feasibility_dcsoc: bool = False) -> None:
     if algorithm not in ALGORITHMS or seed not in SEEDS: raise ValueError("invalid K7 coordinate")
+    if feasibility_dcsoc and (algorithm != "dcsoc" or seed != 42):
+        raise ValueError("feasibility gate is DC-SoC seed42 only")
     cfg=yaml.safe_load(base_path.read_text()); source,targets=design(cfg,seed)
     cfg["experiment"]=f"k7_exp11_{algorithm}_seed{seed}"; cfg["strategy"]=STRATEGIES[algorithm]
     cfg["topology"]["seed"]=seed; cfg["messageSource"]=source; cfg["k5_h2"]["seed"]=seed
     cfg["k7_exp11"].update({"algorithm":algorithm,"seed":seed,"source_peer":source,"target_peers":targets})
+    if feasibility_dcsoc:
+        cfg["experiment"]="k7_dcsoc_feas25_seed42"
+        cfg["workload"]["messageCount"]=FEASIBILITY_MESSAGE_COUNT
+        cfg["k7_exp11"].update({"feasibility_gate":"dcsoc_25s_seed42","scientific_use":"FEASIBILITY-ONLY / NOT EXP11 RESULT","plannedLeaveOffsetsSec":list(FEASIBILITY_LEAVE_OFFSETS_S)})
     cfg["dcsoc"]={"eps":2.0,"min_samples":3,"preserve_message_source":True,"dynamic_maintenance":algorithm=="dcsoc"}
     out.parent.mkdir(parents=True,exist_ok=True); out.write_text(yaml.safe_dump(cfg,sort_keys=False))
 
@@ -55,7 +64,8 @@ def enrich_topology(path: Path, config_path: Path) -> None:
     targets=[int(x) for x in meta["target_peers"]]
     events=[]
     offsets=tuple(float(x) for x in meta["plannedLeaveOffsetsSec"])
-    if offsets != PLANNED_LEAVE_OFFSETS_S:
+    expected_offsets=FEASIBILITY_LEAVE_OFFSETS_S if meta.get("feasibility_gate") else PLANNED_LEAVE_OFFSETS_S
+    if offsets != expected_offsets:
         raise ValueError("K7 planned leave offsets differ from frozen schedule")
     for i,(target,offset) in enumerate(zip(targets,offsets),1):
         node=topo["nodes"][str(target)]
@@ -63,6 +73,13 @@ def enrich_topology(path: Path, config_path: Path) -> None:
         events.append({"event_index":i,"target_peer":target,"target_role":role,"planned_leave_offset_s":offset,"recovery_action":"statefulset_recreate_and_ready_alive"})
     topo["k7_exp11"]={**meta,"planned_churn_schedule":events,"num_events":4,"schedule_semantics":"fixed_offsets_fail_closed","maintenance_interval":"after_each_completed_cycle" if meta["algorithm"]=="dcsoc" else None}
     path.write_text(json.dumps(topo,indent=2)+"\n")
+
+def validate_feasibility_topology(path: Path) -> None:
+    t=json.loads(path.read_text()); m=t.get("k7_exp11",{}); schedule=m.get("planned_churn_schedule",[])
+    targets=[int(e["target_peer"]) for e in schedule]
+    checks={"identity":t.get("experiment")=="k7_dcsoc_feas25_seed42","coordinate":t.get("strategy")=="dcsoc" and m.get("algorithm")=="dcsoc" and m.get("seed")==42,"workload":t.get("workload")=={"message_count":FEASIBILITY_MESSAGE_COUNT,"message_interval":.4},"schedule":tuple(float(e["planned_leave_offset_s"]) for e in schedule)==FEASIBILITY_LEAVE_OFFSETS_S,"targets":targets==[0,5,10,15] and len(set(targets))==4,"source_safe":int(t["message_source"]) not in targets,"label":m.get("scientific_use")=="FEASIBILITY-ONLY / NOT EXP11 RESULT"}
+    bad=[name for name,ok in checks.items() if not ok]
+    if bad: raise ValueError(f"{path}: feasibility contract failed: {bad}")
 
 def validate_topologies(paths: list[Path], expected=ALGORITHMS) -> None:
     seen=[]; reference=None; physical=None
@@ -203,13 +220,15 @@ def validate_run(run_dir: Path) -> dict:
 
 def main():
     p=argparse.ArgumentParser(); s=p.add_subparsers(dest="cmd",required=True)
-    c=s.add_parser("config"); c.add_argument("--base",type=Path,required=True); c.add_argument("--out",type=Path,required=True); c.add_argument("--algorithm",choices=ALGORITHMS,required=True); c.add_argument("--seed",type=int,required=True)
+    c=s.add_parser("config"); c.add_argument("--base",type=Path,required=True); c.add_argument("--out",type=Path,required=True); c.add_argument("--algorithm",choices=ALGORITHMS,required=True); c.add_argument("--seed",type=int,required=True); c.add_argument("--feasibility-dcsoc",action="store_true")
     e=s.add_parser("enrich"); e.add_argument("--topology",type=Path,required=True); e.add_argument("--config",type=Path,required=True)
     v=s.add_parser("contract"); v.add_argument("paths",nargs="+",type=Path)
     r=s.add_parser("run"); r.add_argument("--run-dir",type=Path,required=True)
+    f=s.add_parser("feasibility-contract"); f.add_argument("path",type=Path)
     a=p.parse_args()
-    if a.cmd=="config": write_config(a.base,a.out,a.algorithm,a.seed)
+    if a.cmd=="config": write_config(a.base,a.out,a.algorithm,a.seed,a.feasibility_dcsoc)
     elif a.cmd=="enrich": enrich_topology(a.topology,a.config)
     elif a.cmd=="contract": validate_topologies(a.paths)
+    elif a.cmd=="feasibility-contract": validate_feasibility_topology(a.path)
     else: print(json.dumps(validate_run(a.run_dir),sort_keys=True))
 if __name__=="__main__": main()

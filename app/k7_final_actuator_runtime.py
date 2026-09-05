@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json, os
 import peer
+import k7_rpc_trace
 from k7_final_actuator_policy import TREATMENTS, requested_fanout
 
 def _configured_treatment() -> str:
@@ -37,4 +38,5 @@ def target_peers(self, sender_id: int, message_id: str | None = None) -> list[in
 
 peer._K5_CANONICAL_TARGET_PEERS = peer.PeerState.target_peers
 peer.PeerState.target_peers = target_peers
+k7_rpc_trace.install(peer)
 if __name__ == "__main__": peer.serve()
